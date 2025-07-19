@@ -119,6 +119,14 @@ int lastBatteryPercent = -1;
 bool lastChargingState = false;
 uint32_t lastStepCount = 0;
 
+// Sleep mode variables
+bool displaySleep = false;
+unsigned long lastActivity = 0;
+const unsigned long SLEEP_TIMEOUT = 10000;  // 10 seconds
+const unsigned long DEEP_SLEEP_TIMEOUT = 30000;  // 30 seconds
+bool deepSleepMode = false;
+bool forceRedraw = false;  // Flag to force complete redraw
+
 // NTP configuration
 #define NTP_SERVER1           "pool.ntp.org"
 #define NTP_SERVER2           "time.nist.gov"
@@ -460,6 +468,10 @@ void setup()
     
     delay(2000);
     
+    // Initialize sleep mode
+    lastActivity = millis();
+    Serial.println("Sleep mode initialized");
+    
     Serial.println("Setup completed!");
 }
 
@@ -503,6 +515,112 @@ void drawWiFiIcon(int x, int y) {
     display.fillRect(x + 5, y + 3, 2, 1, COLOR_TEXT);  // Top arc
 }
 
+void enterSleepMode() {
+    if (!displaySleep) {
+        Serial.println("Entering sleep mode...");
+        displaySleep = true;
+        display.setBrightness(0);  // Turn off backlight
+        display.fillScreen(COLOR_BACKGROUND);  // Clear screen
+    }
+}
+
+void exitSleepMode() {
+    if (displaySleep) {
+        Serial.println("Exiting sleep mode...");
+        displaySleep = false;
+        deepSleepMode = false;
+        lastActivity = millis();
+        
+        // Restore brightness based on battery level
+        if (batteryPercent <= 20) {
+            display.setBrightness(64);  // 25% brightness
+        } else if (batteryPercent <= 50) {
+            display.setBrightness(128); // 50% brightness
+        } else {
+            display.setBrightness(255); // 100% brightness
+        }
+        
+        // Force complete redraw
+        forceRedraw = true;
+        
+        // Redraw the interface completely
+        drawPixelArtClock();
+    }
+}
+
+void checkActivity() {
+    // Check for accelerometer movement
+    if (BMA.isPedometer()) {
+        uint32_t currentSteps = BMA.getPedometerCounter();
+        if (currentSteps != lastStepCount) {
+            lastActivity = millis();
+            lastStepCount = currentSteps;
+            if (displaySleep) {
+                exitSleepMode();
+            }
+        }
+    }
+    
+    // Check for accelerometer movement (more sensitive)
+    static int16_t lastAccelX = 0, lastAccelY = 0, lastAccelZ = 0;
+    int16_t rawBuffer[3];
+    
+    // Read accelerometer data
+    if (BMA.getAccelRaw(rawBuffer)) {
+        int16_t accelX = rawBuffer[0];
+        int16_t accelY = rawBuffer[1];
+        int16_t accelZ = rawBuffer[2];
+        
+        // Check if there's significant movement
+        int32_t movement = abs(accelX - lastAccelX) + abs(accelY - lastAccelY) + abs(accelZ - lastAccelZ);
+        if (movement > 100) {  // Threshold for movement detection
+            lastActivity = millis();
+            if (displaySleep) {
+                exitSleepMode();
+            }
+        }
+        
+        lastAccelX = accelX;
+        lastAccelY = accelY;
+        lastAccelZ = accelZ;
+    }
+    
+    // Check for touch (if available)
+    // Note: T-Watch S3 has touch capability, but we need to implement it
+    
+    // Check for button press (if available)
+    // Note: T-Watch S3 has buttons, but we need to implement them
+}
+
+void manageSleepMode() {
+    unsigned long currentTime = millis();
+    
+    // Check if we should enter sleep mode
+    if (!displaySleep && (currentTime - lastActivity > SLEEP_TIMEOUT)) {
+        enterSleepMode();
+    }
+    
+    // Check if we should enter deep sleep mode
+    if (displaySleep && !deepSleepMode && (currentTime - lastActivity > DEEP_SLEEP_TIMEOUT)) {
+        Serial.println("Entering deep sleep mode...");
+        deepSleepMode = true;
+        
+        // Disable WiFi to save power
+        if (wifiConnected) {
+            WiFi.disconnect();
+            wifiConnected = false;
+            Serial.println("WiFi disabled for deep sleep");
+        }
+        
+        // Reduce CPU frequency
+        setCpuFrequencyMhz(80);  // Reduce from 240MHz to 80MHz
+        Serial.println("CPU frequency reduced to 80MHz");
+    }
+    
+    // Check for activity to wake up
+    checkActivity();
+}
+
 void drawPixelArtClock()
 {
     // Get current time
@@ -521,7 +639,7 @@ void drawPixelArtClock()
     static int lastHour = -1;
     static int lastMinute = -1;
     
-    if (lastDay != timeinfo.tm_mday || lastHour != timeinfo.tm_hour || lastMinute != timeinfo.tm_min) {
+    if (forceRedraw || lastDay != timeinfo.tm_mday || lastHour != timeinfo.tm_hour || lastMinute != timeinfo.tm_min) {
         // Clear screen and draw border
         display.fillScreen(COLOR_BACKGROUND);
         drawPixelArtBorder();
@@ -605,6 +723,9 @@ void drawPixelArtClock()
         lastDay = timeinfo.tm_mday;
         lastHour = timeinfo.tm_hour;
         lastMinute = timeinfo.tm_min;
+        
+        // Reset force redraw flag
+        forceRedraw = false;
     }
     
     // Update only seconds (most frequent change)
@@ -682,14 +803,23 @@ void drawPixelArtClock()
 
 void loop()
 {
-    // Read battery information every 5 seconds
-    static unsigned long lastBatteryRead = 0;
-    if (millis() - lastBatteryRead > 5000) {
-        readBatteryInfo();
-        optimizeBatteryUsage();  // Apply battery optimizations
-        lastBatteryRead = millis();
-    }
+    // Manage sleep mode
+    manageSleepMode();
     
-    drawPixelArtClock();  // Use the new pixel art interface
-    delay(1000);
+    // Only update display if not in sleep mode
+    if (!displaySleep) {
+        // Read battery information every 5 seconds
+        static unsigned long lastBatteryRead = 0;
+        if (millis() - lastBatteryRead > 5000) {
+            readBatteryInfo();
+            optimizeBatteryUsage();  // Apply battery optimizations
+            lastBatteryRead = millis();
+        }
+        
+        drawPixelArtClock();  // Use the new pixel art interface
+        delay(1000);
+    } else {
+        // In sleep mode, just check for activity
+        delay(100);  // Shorter delay for faster response
+    }
 } 
