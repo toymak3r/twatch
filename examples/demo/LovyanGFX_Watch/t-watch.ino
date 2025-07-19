@@ -81,12 +81,12 @@ public:
 
 LGFX display;
 
-// Colors (adjusted for ST7789)
-#define COLOR_RED            0x00FFFF   // Cyan (will be inverted to red)
-#define COLOR_GREEN          0xFF00FF   // Magenta (will be inverted to green)
-#define COLOR_BLUE           0xFFFF00   // Yellow (will be inverted to blue)
-#define COLOR_WHITE          0x000000   // Black (will be inverted to white)
-#define COLOR_BLACK          0xFFFFFF   // White (will be inverted to black)
+// Colors (Dark Theme - Black background, White text)
+#define COLOR_RED            0xF800     // Red
+#define COLOR_GREEN          0x07E0     // Green
+#define COLOR_BLUE           0x001F     // Blue
+#define COLOR_WHITE          0xFFFF     // White
+#define COLOR_BLACK          0x0000     // Black
 #define COLOR_BACKGROUND     COLOR_BLACK
 #define COLOR_TEXT           COLOR_WHITE
 
@@ -112,6 +112,12 @@ bool isCharging = false;
 bool isBatteryConnected = false;
 float batteryCurrent = 0.0;
 float batteryPower = 0.0;
+
+// Anti-flicker variables
+int lastSecond = -1;
+int lastBatteryPercent = -1;
+bool lastChargingState = false;
+uint32_t lastStepCount = 0;
 
 // NTP configuration
 #define NTP_SERVER1           "pool.ntp.org"
@@ -303,7 +309,7 @@ void setup()
     
     display.setRotation(2);  // Fix inverted display
     display.setBrightness(128);
-    Serial.println("Display configured");
+    Serial.println("Display configured with dark theme");
     
     // Show initial screen
     display.fillScreen(COLOR_BACKGROUND);
@@ -457,12 +463,52 @@ void setup()
     Serial.println("Setup completed!");
 }
 
-void drawClock()
-{
-    display.fillScreen(COLOR_BACKGROUND);
+void drawPixelArtBorder() {
+    // Draw pixelated border around the screen
+    int borderWidth = 4;
     
+    // Top border with pixelated effect
+    for (int x = 0; x < 240; x += 2) {
+        display.fillRect(x, 0, 2, borderWidth, COLOR_TEXT);
+    }
+    
+    // Bottom border with pixelated effect
+    for (int x = 0; x < 240; x += 2) {
+        display.fillRect(x, 240 - borderWidth, 2, borderWidth, COLOR_TEXT);
+    }
+    
+    // Left border with pixelated effect
+    for (int y = 0; y < 240; y += 2) {
+        display.fillRect(0, y, borderWidth, 2, COLOR_TEXT);
+    }
+    
+    // Right border with pixelated effect
+    for (int y = 0; y < 240; y += 2) {
+        display.fillRect(240 - borderWidth, y, borderWidth, 2, COLOR_TEXT);
+    }
+}
+
+void drawWiFiIcon(int x, int y) {
+    // Draw pixelated WiFi icon
+    int iconSize = 12;
+    
+    // WiFi signal lines (pixelated)
+    display.fillRect(x + 2, y + 8, 2, 2, COLOR_TEXT);  // Bottom dot
+    display.fillRect(x + 4, y + 6, 2, 2, COLOR_TEXT);  // Middle dot
+    display.fillRect(x + 6, y + 4, 2, 2, COLOR_TEXT);  // Top dot
+    
+    // WiFi arcs (simplified pixelated)
+    display.fillRect(x + 1, y + 7, 2, 1, COLOR_TEXT);  // Bottom arc
+    display.fillRect(x + 3, y + 5, 2, 1, COLOR_TEXT);  // Middle arc
+    display.fillRect(x + 5, y + 3, 2, 1, COLOR_TEXT);  // Top arc
+}
+
+void drawPixelArtClock()
+{
     // Get current time
     if (!getLocalTime(&timeinfo)) {
+        display.fillScreen(COLOR_BACKGROUND);
+        drawPixelArtBorder();
         display.setTextColor(COLOR_RED);
         display.setTextSize(2);
         display.setCursor(20, 100);
@@ -470,57 +516,167 @@ void drawClock()
         return;
     }
     
-    // Draw time
-    display.setTextColor(COLOR_TEXT);
-    display.setTextSize(4);
-    char timeStr[10];
-    sprintf(timeStr, "%02d:%02d", timeinfo.tm_hour, timeinfo.tm_min);
-    display.setCursor(40, 80);
-    display.println(timeStr);
+    // Only redraw everything on first run or when date changes
+    static int lastDay = -1;
+    static int lastHour = -1;
+    static int lastMinute = -1;
     
-    // Draw seconds
-    display.setTextSize(2);
-    sprintf(timeStr, "%02d", timeinfo.tm_sec);
-    display.setCursor(180, 90);
-    display.println(timeStr);
-    
-    // Draw date
-    display.setTextSize(2);
-    char dateStr[20];
-    sprintf(dateStr, "%02d/%02d/%04d", timeinfo.tm_mday, timeinfo.tm_mon + 1, timeinfo.tm_year + 1900);
-    display.setCursor(20, 140);
-    display.println(dateStr);
-    
-    // Draw battery status
-    display.setTextSize(2);
-    if (pmuInitialized && isBatteryConnected) {
-        char batteryStr[50];
+    if (lastDay != timeinfo.tm_mday || lastHour != timeinfo.tm_hour || lastMinute != timeinfo.tm_min) {
+        // Clear screen and draw border
+        display.fillScreen(COLOR_BACKGROUND);
+        drawPixelArtBorder();
         
-        // Show battery percentage and voltage
-        sprintf(batteryStr, "BAT: %d%% %.2fV", batteryPercent, batteryVoltage);
-        display.setCursor(20, 170);
+        // Draw horizontal separator lines (pixelated)
+        display.fillRect(8, 50, 224, 2, COLOR_TEXT);   // Top separator
+        display.fillRect(8, 180, 224, 2, COLOR_TEXT);  // Bottom separator
+        
+        // Top section - Status bar
+        display.setTextColor(COLOR_TEXT);
+        display.setTextSize(1);
+        
+        // Day of week
+        char dayStr[10];
+        const char* days[] = {"SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"};
+        sprintf(dayStr, "%s", days[timeinfo.tm_wday]);
+        display.setCursor(12, 12);
+        display.println(dayStr);
+        
+        // Date in top left
+        char dateStr[10];
+        sprintf(dateStr, "%02d %s", timeinfo.tm_mday, 
+                (timeinfo.tm_mon == 0) ? "JAN" : 
+                (timeinfo.tm_mon == 1) ? "FEB" : 
+                (timeinfo.tm_mon == 2) ? "MAR" : 
+                (timeinfo.tm_mon == 3) ? "APR" : 
+                (timeinfo.tm_mon == 4) ? "MAY" : 
+                (timeinfo.tm_mon == 5) ? "JUN" : 
+                (timeinfo.tm_mon == 6) ? "JUL" : 
+                (timeinfo.tm_mon == 7) ? "AUG" : 
+                (timeinfo.tm_mon == 8) ? "SEP" : 
+                (timeinfo.tm_mon == 9) ? "OCT" : 
+                (timeinfo.tm_mon == 10) ? "NOV" : "DEC");
+        display.setCursor(12, 24);
+        display.println(dateStr);
+        
+        // Battery percentage in top right
+        char batteryStr[10];
+        sprintf(batteryStr, "%d%%", batteryPercent);
+        display.setCursor(180, 12);
         display.println(batteryStr);
         
-        // Show charging status
+        // WiFi icon in top right
+        if (wifiConnected) {
+            drawWiFiIcon(200, 8);
+        }
+        
+        // Middle section - Large time display (hours and minutes)
+        display.setTextColor(COLOR_TEXT);
+        display.setTextSize(6);  // Very large text for time
+        
+        char timeStr[10];
+        sprintf(timeStr, "%02d:%02d", timeinfo.tm_hour, timeinfo.tm_min);
+        display.setCursor(20, 70);
+        display.println(timeStr);
+        
+        // Bottom section - Additional info
+        display.setTextSize(1);
+        
+        // Date again in bottom center
+        display.setCursor(90, 200);
+        display.println(dateStr);
+        
+        // Steps counter
+        if (BMA.isPedometer()) {
+            stepCounter = BMA.getPedometerCounter();
+            char stepsStr[20];
+            sprintf(stepsStr, "STEPS: %lu", stepCounter);
+            display.setCursor(12, 200);
+            display.println(stepsStr);
+        }
+        
+        // Battery voltage
+        if (pmuInitialized && isBatteryConnected) {
+            char voltageStr[15];
+            sprintf(voltageStr, "%.2fV", batteryVoltage);
+            display.setCursor(180, 200);
+            display.println(voltageStr);
+        }
+        
+        lastDay = timeinfo.tm_mday;
+        lastHour = timeinfo.tm_hour;
+        lastMinute = timeinfo.tm_min;
+    }
+    
+    // Update only seconds (most frequent change)
+    static int lastSecond = -1;
+    if (lastSecond != timeinfo.tm_sec) {
+        // Clear seconds area
+        display.fillRect(180, 100, 60, 30, COLOR_BACKGROUND);
+        
+        // Draw new seconds
+        display.setTextColor(COLOR_TEXT);
+        display.setTextSize(3);
+        char timeStr[10];
+        sprintf(timeStr, "%02d", timeinfo.tm_sec);
+        display.setCursor(180, 100);
+        display.println(timeStr);
+        
+        lastSecond = timeinfo.tm_sec;
+    }
+    
+    // Update battery info only when it changes
+    static int lastBatteryPercent = -1;
+    if (lastBatteryPercent != batteryPercent) {
+        // Clear battery area
+        display.fillRect(180, 12, 40, 10, COLOR_BACKGROUND);
+        
+        // Draw new battery percentage
+        display.setTextColor(COLOR_TEXT);
+        display.setTextSize(1);
+        char batteryStr[10];
+        sprintf(batteryStr, "%d%%", batteryPercent);
+        display.setCursor(180, 12);
+        display.println(batteryStr);
+        
+        lastBatteryPercent = batteryPercent;
+    }
+    
+    // Update charging status only when it changes
+    static bool lastChargingState = false;
+    if (lastChargingState != isCharging) {
+        // Clear charging area
+        display.fillRect(12, 36, 50, 10, COLOR_BACKGROUND);
+        
+        // Show charging status if charging
         if (isCharging) {
             display.setTextColor(COLOR_GREEN);
-            display.setCursor(20, 190);
+            display.setTextSize(1);
+            display.setCursor(12, 36);
             display.println("CHARGING");
             display.setTextColor(COLOR_TEXT);
         }
-    } else {
-        display.setTextColor(COLOR_RED);
-        display.setCursor(20, 170);
-        display.println("BAT: N/A");
-        display.setTextColor(COLOR_TEXT);
+        
+        lastChargingState = isCharging;
     }
     
-    // Draw steps
+    // Update steps only when they change
+    static uint32_t lastStepCount = 0;
     if (BMA.isPedometer()) {
         stepCounter = BMA.getPedometerCounter();
-        sprintf(dateStr, "Steps: %lu", stepCounter);
-        display.setCursor(20, 200);
-        display.println(dateStr);
+        if (lastStepCount != stepCounter) {
+            // Clear steps area
+            display.fillRect(12, 200, 80, 10, COLOR_BACKGROUND);
+            
+            // Draw new steps
+            display.setTextColor(COLOR_TEXT);
+            display.setTextSize(1);
+            char stepsStr[20];
+            sprintf(stepsStr, "STEPS: %lu", stepCounter);
+            display.setCursor(12, 200);
+            display.println(stepsStr);
+            
+            lastStepCount = stepCounter;
+        }
     }
 }
 
@@ -534,6 +690,6 @@ void loop()
         lastBatteryRead = millis();
     }
     
-    drawClock();
+    drawPixelArtClock();  // Use the new pixel art interface
     delay(1000);
 } 
