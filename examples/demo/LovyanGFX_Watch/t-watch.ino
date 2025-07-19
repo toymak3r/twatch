@@ -104,6 +104,15 @@ bool wifiConnected = false;
 WiFiNetwork wifiNetworks[4];
 int wifiNetworkCount = 0;
 
+// Battery variables
+bool pmuInitialized = false;
+float batteryVoltage = 0.0;
+int batteryPercent = 0;
+bool isCharging = false;
+bool isBatteryConnected = false;
+float batteryCurrent = 0.0;
+float batteryPower = 0.0;
+
 // NTP configuration
 #define NTP_SERVER1           "pool.ntp.org"
 #define NTP_SERVER2           "time.nist.gov"
@@ -187,6 +196,60 @@ bool loadWiFiConfig() {
     }
     
     return wifiNetworkCount > 0;
+}
+
+// Function to read battery information
+void readBatteryInfo() {
+    if (!pmuInitialized) return;
+    
+    // Read battery voltage
+    batteryVoltage = PMU.getBattVoltage();
+    
+    // Read battery percentage
+    batteryPercent = PMU.getBatteryPercent();
+    
+    // Check if battery is connected
+    isBatteryConnected = PMU.isBatteryConnect();
+    
+    // Check if charging
+    isCharging = PMU.isCharging();
+    
+    // Note: getBattCurrent() not available in XPowersLib
+    // batteryCurrent = PMU.getBattCurrent();
+    // batteryPower = batteryVoltage * batteryCurrent;
+    
+    // Debug output
+    Serial.printf("Battery: %.2fV, %d%%, Charging: %s, Connected: %s\n", 
+                 batteryVoltage, batteryPercent, 
+                 isCharging ? "Yes" : "No", 
+                 isBatteryConnected ? "Yes" : "No");
+}
+
+// Function to optimize battery usage based on battery level
+void optimizeBatteryUsage() {
+    if (!pmuInitialized) return;
+    
+    // Adjust screen brightness based on battery level
+    if (batteryPercent <= 20) {
+        // Low battery - reduce brightness
+        display.setBrightness(64);  // 25% brightness
+        Serial.println("Low battery: Reduced brightness");
+    } else if (batteryPercent <= 50) {
+        // Medium battery - moderate brightness
+        display.setBrightness(128); // 50% brightness
+        Serial.println("Medium battery: Moderate brightness");
+    } else {
+        // High battery - full brightness
+        display.setBrightness(255); // 100% brightness
+        Serial.println("High battery: Full brightness");
+    }
+    
+    // Disable WiFi if battery is very low (optional)
+    if (batteryPercent <= 10 && wifiConnected) {
+        WiFi.disconnect();
+        wifiConnected = false;
+        Serial.println("Very low battery: WiFi disabled");
+    }
 }
 
 // Function to try connecting to WiFi networks
@@ -291,6 +354,7 @@ void setup()
                     display.setCursor(20, 140);
                     display.println("PMU: OK");
                     pmuFound = true;
+                    pmuInitialized = true;
                     break;
                 } else {
                     Serial.printf("PMU init failed at 0x%02X\n", pmuAddresses[i]);
@@ -427,9 +491,29 @@ void drawClock()
     display.setCursor(20, 140);
     display.println(dateStr);
     
-    // Draw battery status (simplified)
-    display.setCursor(20, 170);
-    display.println("BAT: N/A");
+    // Draw battery status
+    display.setTextSize(2);
+    if (pmuInitialized && isBatteryConnected) {
+        char batteryStr[50];
+        
+        // Show battery percentage and voltage
+        sprintf(batteryStr, "BAT: %d%% %.2fV", batteryPercent, batteryVoltage);
+        display.setCursor(20, 170);
+        display.println(batteryStr);
+        
+        // Show charging status
+        if (isCharging) {
+            display.setTextColor(COLOR_GREEN);
+            display.setCursor(20, 190);
+            display.println("CHARGING");
+            display.setTextColor(COLOR_TEXT);
+        }
+    } else {
+        display.setTextColor(COLOR_RED);
+        display.setCursor(20, 170);
+        display.println("BAT: N/A");
+        display.setTextColor(COLOR_TEXT);
+    }
     
     // Draw steps
     if (BMA.isPedometer()) {
@@ -442,6 +526,14 @@ void drawClock()
 
 void loop()
 {
+    // Read battery information every 5 seconds
+    static unsigned long lastBatteryRead = 0;
+    if (millis() - lastBatteryRead > 5000) {
+        readBatteryInfo();
+        optimizeBatteryUsage();  // Apply battery optimizations
+        lastBatteryRead = millis();
+    }
+    
     drawClock();
     delay(1000);
 } 
