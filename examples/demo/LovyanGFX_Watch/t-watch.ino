@@ -7,7 +7,6 @@
 #include "esp_sntp.h"
 #include <FFat.h>
 #include <FS.h>
-#include "nexarustslab_font.h"
 
 // Board pin definitions (from Setup212_LilyGo_T_Watch_S3.h)
 #define BOARD_LCD_SCLK    18  // TFT_SCLK
@@ -540,10 +539,10 @@ void formatTimeString(char* timeStr, int hour, int minute) {
 }
 
 void setupNexaRustSlabFont() {
-    // For now, use the default font but with larger text sizes
-    // The custom font will be implemented in a future update
-    display.setFont(&fonts::Font0);  // Use default font
-    Serial.println("Using default font with custom sizing");
+    // Use a built-in font that looks similar to NexaRustSlab
+    // For now, use the default font with larger text sizes to simulate the style
+    display.setFont(&fonts::Font0);
+    Serial.println("Using default font with NexaRustSlab-style sizing");
 }
 
 void drawCustomWiFiIcon(int x, int y) {
@@ -696,30 +695,30 @@ void drawCustomInterface()
         const char* days[] = {"SUNDAY", "MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY"};
         sprintf(dayStr, "%s", days[timeinfo.tm_wday]);
         display.setTextColor(COLOR_CUSTOM_TEXT);  // Vermelho puro
-        display.setTextSize(3);  // NexaRustSlab style - larger
-        display.setCursor(120 - (strlen(dayStr) * 9), 30);  // Centralizado
+        display.setTextSize(3);  // Large text to simulate NexaRustSlab
+        display.setCursor(120 - (strlen(dayStr) * 18), 30);  // Centralizado
         display.println(dayStr);
         
         // 2. DATE - Centralizado horizontalmente
         char dateStr[20];
         const char* months[] = {"JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"};
         sprintf(dateStr, "%02d %s", timeinfo.tm_mday, months[timeinfo.tm_mon]);
-        display.setTextSize(3);  // NexaRustSlab style - larger
-        display.setCursor(120 - (strlen(dateStr) * 9), 58);  // Centralizado
+        display.setTextSize(3);  // Large text to simulate NexaRustSlab
+        display.setCursor(120 - (strlen(dateStr) * 18), 58);  // Centralizado
         display.println(dateStr);
         
         // 3. TIME - Centralizado
         char timeStr[20];
         formatTimeString(timeStr, timeinfo.tm_hour, timeinfo.tm_min);
-        display.setTextSize(5);  // NexaRustSlab style - very large
-        display.setCursor(120 - (strlen(timeStr) * 15), 120);  // Centralizado
+        display.setTextSize(5);  // Very large text to simulate NexaRustSlab
+        display.setCursor(120 - (strlen(timeStr) * 30), 120);  // Centralizado
         display.println(timeStr);
         
         // 4. TEMPERATURE - Alinhado à esquerda
         // TODO: Implementar leitura de temperatura do sensor
         char tempStr[10];
         sprintf(tempStr, "21°C");  // Placeholder
-        display.setTextSize(3);  // NexaRustSlab style - larger
+        display.setTextSize(3);  // Large text to simulate NexaRustSlab
         display.setCursor(45, 195);
         display.println(tempStr);
         
@@ -730,14 +729,14 @@ void drawCustomInterface()
         } else {
             // Draw disconnected icon (X)
             display.setTextSize(3);
-            display.setCursor(120 - 9, 195);
+            display.setCursor(120 - 18, 195);
             display.println("X");
         }
         
         // 6. BATTERY_PERCENTAGE - Alinhado à direita
         char batteryStr[10];
         sprintf(batteryStr, "%d%%", batteryPercent);
-        display.setTextSize(3);  // NexaRustSlab style - larger
+        display.setTextSize(3);  // Large text to simulate NexaRustSlab
         display.setCursor(195 - (strlen(batteryStr) * 18), 195);
         display.println(batteryStr);
         
@@ -753,14 +752,14 @@ void drawCustomInterface()
     static int lastMinuteUpdate = -1;
     if (lastMinuteUpdate != timeinfo.tm_min) {
         // Clear and redraw time area
-        display.fillRect(120 - 75, 120, 150, 60, COLOR_BACKGROUND);
+        display.fillRect(120 - 90, 120, 180, 60, COLOR_BACKGROUND);
         
         // Redraw time with new minutes
         char timeStr[20];
         formatTimeString(timeStr, timeinfo.tm_hour, timeinfo.tm_min);
         display.setTextColor(COLOR_CUSTOM_TEXT);
-        display.setTextSize(5);  // NexaRustSlab style - very large
-        display.setCursor(120 - (strlen(timeStr) * 15), 120);
+        display.setTextSize(5);  // Very large text to simulate NexaRustSlab
+        display.setCursor(120 - (strlen(timeStr) * 30), 120);
         display.println(timeStr);
         
         lastMinuteUpdate = timeinfo.tm_min;
