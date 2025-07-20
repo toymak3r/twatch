@@ -1058,9 +1058,19 @@ void checkActivity() {
 
 void manageSleepMode() {
     unsigned long currentTime = millis();
+    static unsigned long lastSleepDebug = 0;
+    
+    // Debug sleep timer every 5 seconds
+    if (millis() - lastSleepDebug > 5000) {
+        lastSleepDebug = millis();
+        unsigned long timeSinceActivity = currentTime - lastActivity;
+        Serial.printf("Sleep timer: %lu ms since last activity, timeout: %lu ms, sleep: %s\n", 
+                     timeSinceActivity, SLEEP_TIMEOUT, displaySleep ? "YES" : "NO");
+    }
     
     // Check if we should enter sleep mode
     if (!displaySleep && (currentTime - lastActivity > SLEEP_TIMEOUT)) {
+        Serial.printf("Sleep timeout reached! Entering sleep mode after %lu ms\n", currentTime - lastActivity);
         enterSleepMode();
     }
     
