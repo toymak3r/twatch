@@ -1646,8 +1646,18 @@ void loop()
     if (!displaySleep) {
         // Read battery information every 8 seconds (conservative for battery life)
         static unsigned long lastBatteryRead = 0;
+        static bool weatherFirstUpdate = true;
+        
         if (millis() - lastBatteryRead > 8000) {
             readBatteryInfo();
+            
+            // Force first weather update immediately
+            if (weatherFirstUpdate) {
+                Serial.println("Forcing first weather update...");
+                lastWeatherUpdate = 0;
+                weatherFirstUpdate = false;
+            }
+            
             Serial.println("Calling getWeatherData()...");
             getWeatherData();  // Get weather data
             optimizeBatteryUsage();  // Apply battery optimizations
