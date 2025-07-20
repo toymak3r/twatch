@@ -1343,10 +1343,10 @@ void getWeatherData() {
             Serial.printf("Converted temperature: %.1f°C\n", weatherTemperature);
             
             if (weatherTemperature != 0 || tempStr == "0") {
-                Serial.printf("Weather temperature: %.1f°C\n", weatherTemperature);
+                Serial.printf("✅ Weather temperature: %.1f°C\n", weatherTemperature);
                 weatherInitialized = true;
             } else {
-                Serial.printf("Invalid temperature value: '%s'\n", tempStr.c_str());
+                Serial.printf("❌ Invalid temperature value: '%s'\n", tempStr.c_str());
             }
         } else {
             Serial.println("Temperature not found in response");
@@ -1637,7 +1637,7 @@ void drawCustomInterface() {
     lastWifiState = wifiConnected;
     
     // Debug info
-    Serial.printf("Time: %s, Date: %s, Day: %s, Battery: %d%%, WiFi: %s, Steps: %lu, Weather: %.1f°C\n", 
+    Serial.printf("📱 Display: Time: %s, Date: %s, Day: %s, Battery: %d%%, WiFi: %s, Steps: %lu, Weather: %.1f°C\n", 
                   timeStr, dateStr, dayStr, batteryPercent, wifiStr, stepCounter, weatherTemperature);
 }
 
