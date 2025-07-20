@@ -1278,9 +1278,8 @@ void getWeatherData() {
     if (lastWeatherUpdate == 0) {
         Serial.println("First weather update - forcing immediate update");
         weatherUpdateInterval = 300000; // Reset to normal interval after first update
-    }
-    
-    if (timeSinceUpdate < weatherUpdateInterval) {
+        // Skip the timing check for first update
+    } else if (timeSinceUpdate < weatherUpdateInterval) {
         Serial.printf("Weather update not due yet. Next update in %lu ms\n", 
                      weatherUpdateInterval - timeSinceUpdate);
         return;
