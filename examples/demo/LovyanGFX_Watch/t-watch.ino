@@ -1318,7 +1318,7 @@ void getWeatherData() {
     if (httpCode == HTTP_CODE_OK) {
         String payload = http.getString();
         Serial.printf("Weather data received, payload length: %d\n", payload.length());
-        Serial.printf("Payload preview: %s\n", payload.substring(0, 200).c_str());
+        Serial.printf("Full payload: %s\n", payload.c_str());
         
         // Update WiFi activity timestamp
         lastWiFiActivity = millis();
@@ -1333,7 +1333,9 @@ void getWeatherData() {
             String tempStr = payload.substring(tempStart, tempEnd);
             tempStr.trim(); // Remove whitespace
             
+            Serial.printf("Raw temperature string: '%s'\n", tempStr.c_str());
             weatherTemperature = tempStr.toFloat();
+            Serial.printf("Converted temperature: %.1f°C\n", weatherTemperature);
             
             if (weatherTemperature != 0 || tempStr == "0") {
                 Serial.printf("Weather temperature: %.1f°C\n", weatherTemperature);
