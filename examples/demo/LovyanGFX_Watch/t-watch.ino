@@ -922,9 +922,24 @@ void exitSleepMode() {
         // Reconnect WiFi if it was disconnected
         if (!wifiConnected && wifiNetworkCount > 0) {
             Serial.println("Reconnecting WiFi...");
+            
+            // Reset WiFi
+            WiFi.disconnect();
+            WiFi.mode(WIFI_OFF);
+            delay(1000);
+            WiFi.mode(WIFI_STA);
+            
             if (connectToWiFi()) {
                 wifiConnected = true;
                 Serial.println("WiFi reconnected successfully");
+                
+                // Reconfigure time sync
+                configTime(GMT_OFFSET_SEC, DAY_LIGHT_OFFSET_SEC, NTP_SERVER1, NTP_SERVER2);
+                Serial.println("Time sync reconfigured");
+                
+                // Force weather update after reconnection
+                lastWeatherUpdate = 0; // Force immediate weather update
+                Serial.println("Weather update scheduled after WiFi reconnection");
             } else {
                 Serial.println("WiFi reconnection failed");
             }
@@ -1110,6 +1125,17 @@ void getWeatherData() {
         return;
     }
     
+    // Check if we have valid weather configuration
+    if (weatherApiKey.length() == 0) {
+        Serial.println("ERROR: Weather API key is empty!");
+        return;
+    }
+    
+    if (weatherCity.length() == 0) {
+        Serial.println("ERROR: Weather city is empty!");
+        return;
+    }
+    
     Serial.println("Getting weather data...");
     Serial.printf("City: %s, Country: %s, Units: %s\n", 
                  weatherCity.c_str(), weatherCountry.c_str(), weatherUnits.c_str());
@@ -1147,10 +1173,16 @@ void getWeatherData() {
             if (tempEnd == -1) tempEnd = payload.indexOf("}", tempStart);
             
             String tempStr = payload.substring(tempStart, tempEnd);
+            tempStr.trim(); // Remove whitespace
+            
             weatherTemperature = tempStr.toFloat();
             
-            Serial.printf("Weather temperature: %.1f°C\n", weatherTemperature);
-            weatherInitialized = true;
+            if (weatherTemperature != 0 || tempStr == "0") {
+                Serial.printf("Weather temperature: %.1f°C\n", weatherTemperature);
+                weatherInitialized = true;
+            } else {
+                Serial.printf("Invalid temperature value: '%s'\n", tempStr.c_str());
+            }
         } else {
             Serial.println("Temperature not found in response");
             Serial.printf("Full response: %s\n", payload.c_str());
