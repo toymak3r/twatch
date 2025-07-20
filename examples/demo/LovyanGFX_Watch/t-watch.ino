@@ -10,11 +10,6 @@
 #include <FS.h>
 #include "wifi_icon.h"
 #include "wifi_green_icon.h"
-#include <NimBLEDevice.h>
-#include <NimBLEServer.h>
-#include <NimBLEUtils.h>
-#include <NimBLE2904.h>
-#include <ArduinoJson.h>
 
 // Enable TrueType font support
 #define LOAD_GFXFF
@@ -42,37 +37,6 @@
 XPowersAXP2101 PMU;
 SensorBMA423 BMA;
 SensorPCF8563 RTC;
-
-// BLE Configuration
-#define DEVICE_NAME "T-Watch-S3"
-#define ANDROID_NOTIFICATION_SERVICE "0000fff0-0000-1000-8000-00805f9b34fb"
-#define ANDROID_NOTIFICATION_CHAR "0000fff1-0000-1000-8000-00805f9b34fb"
-#define CONTROL_CHAR_UUID "2A4E"  // HID Control Point
-
-// Notification structure
-struct Notification {
-    String app;
-    String title;
-    String message;
-    String timestamp;
-    bool isRead;
-};
-
-#define MAX_NOTIFICATIONS 10
-Notification notifications[MAX_NOTIFICATIONS];
-int notificationCount = 0;
-int currentNotification = 0;
-
-// BLE Server and Service
-NimBLEServer* pServer = nullptr;
-NimBLEService* pNotificationService = nullptr;
-NimBLECharacteristic* pNotificationChar = nullptr;
-NimBLECharacteristic* pControlChar = nullptr;
-
-// Connection state
-bool deviceConnected = false;
-bool oldDeviceConnected = false;
-bool bleEnabled = false;
 
 // LovyanGFX Display Configuration (based on working test)
 class LGFX : public lgfx::LGFX_Device
@@ -253,29 +217,6 @@ const int MAX_WIFI_RECONNECT_ATTEMPTS = 3;
 bool touchInitialized = false;
 uint16_t lastTouchX = 0, lastTouchY = 0;
 bool touchDetected = false;
-
-// BLE Callback Classes
-class ServerCallbacks: public NimBLEServerCallbacks {
-    void onConnect(NimBLEServer* pServer) {
-        deviceConnected = true;
-        Serial.println("BLE Device connected");
-    }
-
-    void onDisconnect(NimBLEServer* pServer) {
-        deviceConnected = false;
-        Serial.println("BLE Device disconnected");
-    }
-};
-
-class CharacteristicCallbacks: public NimBLECharacteristicCallbacks {
-    void onWrite(NimBLECharacteristic* pCharacteristic) {
-        std::string value = pCharacteristic->getValue();
-        if (value.length() > 0) {
-            Serial.printf("Received notification data: %s\n", value.c_str());
-            processNotificationData(value);
-        }
-    }
-};
 
 // NTP configuration
 #define NTP_SERVER1           "pool.ntp.org"
@@ -819,9 +760,6 @@ void setup()
     
     // Load WiFi image
     loadWiFiImage();
-    
-    // Initialize BLE
-    setupBLE();
     
     // Initialize sleep mode
     lastActivity = millis();
@@ -1692,28 +1630,6 @@ void drawCustomInterface() {
     // Temperature
     drawTrueTypeText(tempStr, tempX, tempY, 1, COLOR_TEXT);
     
-    // Notifications (if any)
-    if (notificationCount > 0) {
-        // Show notification indicator
-        display.fillCircle(220, 20, 8, COLOR_RED);
-        drawTrueTypeText(String(notificationCount).c_str(), 218, 15, 1, COLOR_WHITE);
-        
-        // Show current notification on bottom
-        if (currentNotification < notificationCount) {
-            String notifText = notifications[currentNotification].app + ": " + 
-                              notifications[currentNotification].title;
-            if (notifText.length() > 25) {
-                notifText = notifText.substring(0, 22) + "...";
-            }
-            drawTrueTypeText(notifText.c_str(), 10, 220, 1, COLOR_ORANGE);
-        }
-    }
-    
-    // BLE Status
-    if (deviceConnected) {
-        drawTrueTypeText("BLE", 200, 220, 1, COLOR_GREEN);
-    }
-    
     // Update last values
     strcpy(lastTimeStr, timeStr);
     strcpy(lastDateStr, dateStr);
@@ -1759,13 +1675,6 @@ void loop()
             lastBatteryRead = millis();
         }
         
-        // Handle touch for notifications
-        if (touchDetected && notificationCount > 0) {
-            currentNotification = (currentNotification + 1) % notificationCount;
-            needsFullRedraw = true;
-            Serial.printf("📱 Navigated to notification %d/%d\n", currentNotification + 1, notificationCount);
-        }
-        
         // Only redraw if something changed or forced redraw
         bool needsUpdate = needsFullRedraw || 
                           (timeinfo.tm_min != lastMinute) || 
@@ -1785,110 +1694,4 @@ void loop()
         // In sleep mode, just check for activity
         delay(300);  // Conservative delay for battery life
     }
-    
-    // Handle BLE connections
-    if (!deviceConnected && oldDeviceConnected) {
-        delay(500);
-        pServer->startAdvertising();
-        Serial.println("BLE: Start advertising");
-        oldDeviceConnected = deviceConnected;
-    }
-    
-    if (deviceConnected && !oldDeviceConnected) {
-        oldDeviceConnected = deviceConnected;
-    }
-}
-
-// BLE Functions
-void setupBLE() {
-    if (!bleEnabled) {
-        // Initialize BLE
-        NimBLEDevice::init(DEVICE_NAME);
-        NimBLEDevice::setMTU(512);
-        
-        // Create server
-        pServer = NimBLEDevice::createServer();
-        pServer->setCallbacks(new ServerCallbacks());
-        
-        // Create notification service
-        pNotificationService = pServer->createService(ANDROID_NOTIFICATION_SERVICE);
-        
-        // Create notification characteristic
-        pNotificationChar = pNotificationService->createCharacteristic(
-            ANDROID_NOTIFICATION_CHAR,
-            NIMBLE_PROPERTY::WRITE |
-            NIMBLE_PROPERTY::WRITE_NR |
-            NIMBLE_PROPERTY::NOTIFY
-        );
-        pNotificationChar->setCallbacks(new CharacteristicCallbacks());
-        
-        // Create control characteristic
-        pControlChar = pNotificationService->createCharacteristic(
-            CONTROL_CHAR_UUID,
-            NIMBLE_PROPERTY::READ |
-            NIMBLE_PROPERTY::WRITE |
-            NIMBLE_PROPERTY::NOTIFY
-        );
-        
-        // Start service
-        pNotificationService->start();
-        
-        // Start advertising
-        NimBLEAdvertising* pAdvertising = NimBLEDevice::getAdvertising();
-        pAdvertising->addServiceUUID(ANDROID_NOTIFICATION_SERVICE);
-        pAdvertising->setScanResponse(true);
-        pAdvertising->setMinPreferred(0x06);
-        pAdvertising->setMinPreferred(0x12);
-        NimBLEDevice::startAdvertising();
-        
-        bleEnabled = true;
-        Serial.println("BLE Notification Service started");
-    }
-}
-
-void processNotificationData(std::string data) {
-    // Parse JSON notification data
-    DynamicJsonDocument doc(1024);
-    DeserializationError error = deserializeJson(doc, data);
-    
-    if (error) {
-        Serial.printf("JSON parsing failed: %s\n", error.c_str());
-        return;
-    }
-    
-    String app = doc["app"].as<String>();
-    String title = doc["title"].as<String>();
-    String message = doc["message"].as<String>();
-    
-    if (app.length() > 0 && title.length() > 0) {
-        addNotification(app, title, message);
-        needsFullRedraw = true; // Force redraw to show notification
-    }
-}
-
-void addNotification(String app, String title, String message) {
-    // Shift existing notifications
-    if (notificationCount >= MAX_NOTIFICATIONS) {
-        for (int i = 0; i < MAX_NOTIFICATIONS - 1; i++) {
-            notifications[i] = notifications[i + 1];
-        }
-        notificationCount = MAX_NOTIFICATIONS - 1;
-    }
-    
-    // Add new notification
-    notifications[notificationCount].app = app;
-    notifications[notificationCount].title = title;
-    notifications[notificationCount].message = message;
-    notifications[notificationCount].timestamp = String(millis() / 1000) + "s ago";
-    notifications[notificationCount].isRead = false;
-    
-    notificationCount++;
-    
-    Serial.printf("📱 Added notification: %s - %s\n", app.c_str(), title.c_str());
-}
-
-void clearNotifications() {
-    notificationCount = 0;
-    currentNotification = 0;
-    Serial.println("📱 Notifications cleared");
 }
