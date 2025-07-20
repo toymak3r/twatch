@@ -210,15 +210,21 @@ String getValue(String data, char separator, int index) {
 
 // Function to load weather configuration from file
 bool loadWeatherConfig() {
+    Serial.println("Loading weather configuration...");
+    
     if (!FFat.begin(true)) {
         Serial.println("FATFS initialization failed for weather config!");
         return false;
     }
     
+    Serial.println("FATFS initialized successfully");
+    
     if (!FFat.exists("/weather_config.ini")) {
         Serial.println("Weather config file not found!");
         return false;
     }
+    
+    Serial.println("Weather config file found!");
     
     File file = FFat.open("/weather_config.ini", "r");
     if (!file) {
@@ -272,6 +278,10 @@ bool loadWeatherConfig() {
     file.close();
     
     // Check if API key is configured
+    Serial.printf("API Key loaded: %s (length: %d)\n", weatherApiKey.c_str(), weatherApiKey.length());
+    Serial.printf("City: %s, Country: %s, Units: %s\n", weatherCity.c_str(), weatherCountry.c_str(), weatherUnits.c_str());
+    Serial.printf("Update interval: %lu ms\n", weatherUpdateInterval);
+    
     if (weatherApiKey.length() > 0 && weatherApiKey != "YOUR_API_KEY_HERE") {
         weatherConfigLoaded = true;
         Serial.println("Weather configuration loaded successfully");
