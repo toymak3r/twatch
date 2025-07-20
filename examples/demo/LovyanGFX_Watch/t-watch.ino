@@ -203,6 +203,16 @@ const unsigned long DEEP_SLEEP_TIMEOUT = 45000;  // 45 seconds (conservative)
 bool deepSleepMode = false;
 bool forceRedraw = false;  // Flag to force complete redraw
 
+// WiFi Power Management
+const unsigned long WIFI_CONNECT_TIMEOUT = 10000;  // 10 seconds to connect
+const unsigned long WIFI_IDLE_TIMEOUT = 30000;     // 30 seconds idle before disconnect
+const unsigned long WIFI_RECONNECT_INTERVAL = 60000; // 1 minute between reconnection attempts
+unsigned long lastWiFiActivity = 0;
+unsigned long lastWiFiReconnectAttempt = 0;
+bool wifiPowerSaving = true;  // Enable WiFi power saving
+int wifiReconnectAttempts = 0;
+const int MAX_WIFI_RECONNECT_ATTEMPTS = 3;
+
 // Touch variables
 bool touchInitialized = false;
 uint16_t lastTouchX = 0, lastTouchY = 0;
@@ -673,21 +683,17 @@ void setup()
         
         delay(1000);
         
-        // Try to connect to WiFi networks
-        Serial.println("Connecting to WiFi...");
+        // Initialize WiFi with power management
+        Serial.println("Initializing WiFi with power management...");
         display.fillScreen(COLOR_BLACK);
         display.setCursor(20, 80);
-        display.println("Connecting WiFi...");
+        display.println("Initializing WiFi...");
         
-        if (connectToWiFi()) {
-            Serial.println("WiFi connected!");
-            wifiConnected = true;
+        connectWiFi();
+        
+        if (wifiConnected) {
             display.setCursor(20, 110);
             display.println("WiFi: CONNECTED");
-            
-            // Sync time
-            configTime(GMT_OFFSET_SEC, DAY_LIGHT_OFFSET_SEC, NTP_SERVER1, NTP_SERVER2);
-            Serial.println("Time sync configured");
             
             // Wait for time sync
             int timeSyncAttempts = 0;
@@ -706,7 +712,6 @@ void setup()
                 display.println("Time: FAIL");
             }
         } else {
-            Serial.println("WiFi connection failed!");
             display.setCursor(20, 110);
             display.println("WiFi: FAILED");
         }
@@ -1095,6 +1100,105 @@ void manageSleepMode() {
     checkActivity();
 }
 
+// WiFi Power Management Functions
+void manageWiFiPower() {
+    unsigned long currentTime = millis();
+    
+    // If WiFi is connected and we're in power saving mode
+    if (wifiConnected && wifiPowerSaving) {
+        // Check if WiFi has been idle for too long
+        if (currentTime - lastWiFiActivity > WIFI_IDLE_TIMEOUT) {
+            Serial.println("WiFi idle timeout - disconnecting to save power");
+            disconnectWiFi();
+            return;
+        }
+    }
+    
+    // If WiFi is not connected and we need weather data
+    if (!wifiConnected && weatherConfigLoaded) {
+        // Check if it's time to try reconnecting
+        if (currentTime - lastWiFiReconnectAttempt > WIFI_RECONNECT_INTERVAL) {
+            if (wifiReconnectAttempts < MAX_WIFI_RECONNECT_ATTEMPTS) {
+                Serial.printf("Attempting WiFi reconnection (attempt %d/%d)\n", 
+                             wifiReconnectAttempts + 1, MAX_WIFI_RECONNECT_ATTEMPTS);
+                connectWiFi();
+                lastWiFiReconnectAttempt = currentTime;
+                wifiReconnectAttempts++;
+            } else {
+                Serial.println("Max WiFi reconnection attempts reached - will retry later");
+                // Reset attempts after a longer period
+                if (currentTime - lastWiFiReconnectAttempt > 300000) { // 5 minutes
+                    wifiReconnectAttempts = 0;
+                }
+            }
+        }
+    }
+}
+
+void disconnectWiFi() {
+    if (wifiConnected) {
+        Serial.println("Disconnecting WiFi to save power...");
+        WiFi.disconnect();
+        WiFi.mode(WIFI_OFF);
+        wifiConnected = false;
+        Serial.println("WiFi disconnected successfully");
+    }
+}
+
+void connectWiFi() {
+    if (wifiConnected) {
+        Serial.println("WiFi already connected");
+        return;
+    }
+    
+    Serial.println("Connecting to WiFi...");
+    
+    // Reset WiFi completely
+    WiFi.disconnect();
+    WiFi.mode(WIFI_OFF);
+    delay(100);
+    
+    // Enable WiFi in station mode
+    WiFi.mode(WIFI_STA);
+    
+    // Set WiFi power saving
+    if (wifiPowerSaving) {
+        WiFi.setSleep(true);  // Enable WiFi sleep mode
+        Serial.println("WiFi power saving enabled");
+    }
+    
+    // Connect to WiFi using the first available network
+    if (wifiNetworkCount > 0) {
+        WiFi.begin(wifiNetworks[0].ssid, wifiNetworks[0].password);
+        Serial.printf("Connecting to: %s\n", wifiNetworks[0].ssid);
+    } else {
+        Serial.println("No WiFi networks configured!");
+        return;
+    }
+    
+    // Wait for connection with timeout
+    unsigned long startTime = millis();
+    while (WiFi.status() != WL_CONNECTED && (millis() - startTime) < WIFI_CONNECT_TIMEOUT) {
+        delay(500);
+        Serial.print(".");
+    }
+    
+    if (WiFi.status() == WL_CONNECTED) {
+        wifiConnected = true;
+        lastWiFiActivity = millis();
+        wifiReconnectAttempts = 0;  // Reset attempts on successful connection
+        Serial.printf("\nWiFi connected! IP: %s\n", WiFi.localIP().toString().c_str());
+        
+        // Configure time sync
+        configTime(GMT_OFFSET_SEC, DAY_LIGHT_OFFSET_SEC, NTP_SERVER1, NTP_SERVER2);
+        Serial.println("Time sync configured");
+    } else {
+        Serial.println("\nWiFi connection failed!");
+        WiFi.disconnect();
+        WiFi.mode(WIFI_OFF);
+    }
+}
+
 // Function to load WiFi image from assets
 bool loadWiFiImage() {
     if (wifiImageLoaded) return true;
@@ -1119,8 +1223,12 @@ bool loadWiFiImage() {
 // Function to get weather data from OpenWeatherMap API
 void getWeatherData() {
     if (!wifiConnected) {
-        Serial.println("WiFi not connected, cannot get weather data");
-        return;
+        Serial.println("WiFi not connected, attempting to connect for weather data...");
+        connectWiFi();
+        if (!wifiConnected) {
+            Serial.println("Failed to connect WiFi for weather data");
+            return;
+        }
     }
     
     if (!weatherConfigLoaded) {
@@ -1174,6 +1282,9 @@ void getWeatherData() {
         String payload = http.getString();
         Serial.printf("Weather data received, payload length: %d\n", payload.length());
         Serial.printf("Payload preview: %s\n", payload.substring(0, 200).c_str());
+        
+        // Update WiFi activity timestamp
+        lastWiFiActivity = millis();
         
         // Parse JSON response (simplified parsing)
         int tempIndex = payload.indexOf("\"temp\":");
@@ -1490,6 +1601,9 @@ void loop()
 {
     // Manage sleep mode
     manageSleepMode();
+    
+    // Manage WiFi power
+    manageWiFiPower();
     
     // Only update display if not in sleep mode
     if (!displaySleep) {
