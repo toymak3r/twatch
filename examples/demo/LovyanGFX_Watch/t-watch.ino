@@ -326,15 +326,28 @@ bool loadWeatherConfig() {
 
 // Function to load WiFi configuration from file
 bool loadWiFiConfig() {
+    Serial.println("Starting WiFi config load...");
+    
     if (!FFat.begin(true)) {
         Serial.println("FATFS initialization failed!");
         return false;
     }
     
+    Serial.println("FATFS initialized successfully");
+    
     if (!FFat.exists("/wifi_config.ini")) {
         Serial.println("WiFi config file not found!");
+        Serial.println("Available files in FATFS:");
+        File root = FFat.open("/");
+        File file = root.openNextFile();
+        while (file) {
+            Serial.printf("  %s (%d bytes)\n", file.name(), file.size());
+            file = root.openNextFile();
+        }
         return false;
     }
+    
+    Serial.println("WiFi config file found!");
     
     File file = FFat.open("/wifi_config.ini", "r");
     if (!file) {
@@ -1154,10 +1167,12 @@ void connectWiFi() {
     // Check if WiFi networks are loaded
     if (wifiNetworkCount == 0) {
         Serial.println("No WiFi networks configured! Loading config first...");
+        Serial.printf("Current wifiNetworkCount: %d\n", wifiNetworkCount);
         if (!loadWiFiConfig()) {
             Serial.println("Failed to load WiFi configuration!");
             return;
         }
+        Serial.printf("After loading, wifiNetworkCount: %d\n", wifiNetworkCount);
     }
     
     Serial.println("Connecting to WiFi...");
