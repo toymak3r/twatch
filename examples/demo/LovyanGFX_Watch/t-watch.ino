@@ -1,5 +1,6 @@
 #include <LovyanGFX.hpp>
 #include <WiFi.h>
+#include <HTTPClient.h>
 #include <Wire.h>
 #include <XPowersLib.h>
 #include <SensorBMA423.hpp>
@@ -8,6 +9,9 @@
 #include <FFat.h>
 #include <FS.h>
 
+// Enable TrueType font support
+#define LOAD_GFXFF
+#define GFXFF 1
 
 // Board pin definitions (from Setup212_LilyGo_T_Watch_S3.h)
 #define BOARD_LCD_SCLK    18  // TFT_SCLK
@@ -63,6 +67,7 @@ public:
             cfg.rgb_order = false;
             cfg.invert = true;  // ST7789 needs inversion
             cfg.readable = false;
+            // Rotation will be set after initialization
             _panel_instance.config(cfg);
         }
 
@@ -103,6 +108,11 @@ LGFX display;
 #define COLOR_CUSTOM_SUCCESS 0x07E0     // Green success
 #define COLOR_CUSTOM_HIGHLIGHT 0xFFFF   // White highlight
 
+// Anti-aliasing colors for smoother text
+#define COLOR_TEXT_AA1       0x8000     // Darker red for anti-aliasing
+#define COLOR_TEXT_AA2       0x4000     // Even darker red for anti-aliasing
+#define COLOR_TEXT_AA3       0x2000     // Very dark red for anti-aliasing
+
 #define COLOR_BACKGROUND     COLOR_CUSTOM_BG
 #define COLOR_TEXT           COLOR_CUSTOM_TEXT
 
@@ -134,13 +144,41 @@ int lastSecond = -1;
 int lastBatteryPercent = -1;
 bool lastChargingState = false;
 uint32_t lastStepCount = 0;
+int lastMinute = -1;
+int lastHour = -1;
+int lastDay = -1;
+int lastMonth = -1;
+bool lastWifiState = false;
+char lastTimeStr[20] = "";
+char lastDateStr[20] = "";
+char lastDayStr[20] = "";
+char lastBatteryStr[16] = "";
+char lastWifiStr[16] = "";
+bool needsFullRedraw = true;
 
 // Sleep mode variables
 bool displaySleep = false;
 unsigned long lastActivity = 0;
 
-// Time format setting (true = 12h, false = 24h)
-bool use12HourFormat = true;
+// Weather variables
+bool weatherInitialized = false;
+float weatherTemperature = 0.0;
+String weatherCity = "São Paulo";
+String weatherCountry = "BR";
+String weatherApiKey = "";
+String weatherDescription = "";
+String weatherUnits = "metric";
+unsigned long lastWeatherUpdate = 0;
+unsigned long weatherUpdateInterval = 300000; // 5 minutes default
+bool weatherConfigLoaded = false;
+
+// WiFi image variables
+bool wifiImageLoaded = false;
+uint16_t* wifiImageBuffer = nullptr;
+int wifiImageWidth = 0;
+int wifiImageHeight = 0;
+
+
 const unsigned long SLEEP_TIMEOUT = 10000;  // 10 seconds
 const unsigned long DEEP_SLEEP_TIMEOUT = 30000;  // 30 seconds
 bool deepSleepMode = false;
@@ -166,6 +204,80 @@ String getValue(String data, char separator, int index) {
         }
     }
     return found > index ? data.substring(strIndex[0], strIndex[1]) : "";
+}
+
+// Function to load weather configuration from file
+bool loadWeatherConfig() {
+    if (!FFat.begin(true)) {
+        Serial.println("FATFS initialization failed for weather config!");
+        return false;
+    }
+    
+    if (!FFat.exists("/weather_config.ini")) {
+        Serial.println("Weather config file not found!");
+        return false;
+    }
+    
+    File file = FFat.open("/weather_config.ini", "r");
+    if (!file) {
+        Serial.println("Failed to open weather config file!");
+        return false;
+    }
+    
+    String line;
+    
+    while (file.available()) {
+        line = file.readStringUntil('\n');
+        line.trim();
+        
+        // Skip comments and empty lines
+        if (line.startsWith("#") || line.length() == 0) {
+            continue;
+        }
+        
+        // Parse API key
+        if (line.startsWith("weather_api_key=")) {
+            weatherApiKey = getValue(line, '=', 1);
+            Serial.println("Weather API key loaded");
+        }
+        
+        // Parse city
+        if (line.startsWith("weather_city=")) {
+            weatherCity = getValue(line, '=', 1);
+            Serial.printf("Weather city: %s\n", weatherCity.c_str());
+        }
+        
+        // Parse country
+        if (line.startsWith("weather_country=")) {
+            weatherCountry = getValue(line, '=', 1);
+            Serial.printf("Weather country: %s\n", weatherCountry.c_str());
+        }
+        
+        // Parse update interval
+        if (line.startsWith("weather_update_interval=")) {
+            String intervalStr = getValue(line, '=', 1);
+            weatherUpdateInterval = intervalStr.toInt();
+            Serial.printf("Weather update interval: %lu ms\n", weatherUpdateInterval);
+        }
+        
+        // Parse units
+        if (line.startsWith("weather_units=")) {
+            weatherUnits = getValue(line, '=', 1);
+            Serial.printf("Weather units: %s\n", weatherUnits.c_str());
+        }
+    }
+    
+    file.close();
+    
+    // Check if API key is configured
+    if (weatherApiKey.length() > 0 && weatherApiKey != "YOUR_API_KEY_HERE") {
+        weatherConfigLoaded = true;
+        Serial.println("Weather configuration loaded successfully");
+        return true;
+    } else {
+        Serial.println("Weather API key not configured!");
+        return false;
+    }
 }
 
 // Function to load WiFi configuration from file
@@ -323,84 +435,64 @@ bool connectToWiFi() {
 void setup()
 {
     Serial.begin(115200);
-    delay(2000);  // Wait for serial to be ready
-    Serial.println("=== T-Watch S3 Working Firmware ===");
-    Serial.flush();
-    delay(100);
+    Serial.println("T-Watch S3 Starting with TrueType fonts...");
     
-    // Initialize display FIRST (proven to work)
-    Serial.println("Initializing display...");
-    Serial.flush();
+    // Initialize display first with improved settings
     display.init();
-    Serial.println("Display initialized");
+    display.setRotation(2);  // Try rotation 2 for correct orientation
+    display.setBrightness(255);
     
-    display.setRotation(2);  // Fix inverted display
-    display.setBrightness(128);
+    // Configure display for better text rendering
+    display.setColorDepth(16);  // Set color depth for better quality
     
-    Serial.println("Display configured with default fonts");
+    // Configure file system for LovyanGFX (commented out due to compatibility issues)
+    // display.setFileStorage(FFat);
     
-    // Show initial screen
-    display.fillScreen(COLOR_BACKGROUND);
-    display.setTextColor(COLOR_TEXT);
-    display.setTextSize(2);
-    display.setCursor(20, 80);
-    display.println("T-Watch S3");
-    display.setCursor(20, 110);
-    display.println("Starting...");
+    // Set default TrueType font
+    display.setFont(&fonts::Font2);
     
-    // Initialize I2C with correct T-Watch S3 pins
+    // Clear screen and show startup message
+    display.fillScreen(COLOR_BLACK);
+    
+    // Basic display test with TrueType text
+    Serial.println("Testing TrueType fonts...");
+    drawTrueTypeText("TRUETYPE TEST", 10, 50, 3, COLOR_TEXT);
+    drawTrueTypeText("Fontes TrueType", 10, 80, 2, COLOR_TEXT);
+    drawTrueTypeText("Qualidade Superior!", 10, 110, 1, COLOR_TEXT);
+    
+    delay(3000);
+    
+    // Clear screen
+    display.fillScreen(COLOR_BLACK);
+    
+    // Initialize I2C
     Wire.begin(BOARD_I2C_SDA, BOARD_I2C_SCL);
-    Serial.println("I2C initialized with correct pins (10, 11)");
+    Serial.println("I2C initialized");
     
-    // Initialize PMU - Enhanced I2C diagnosis
-    Serial.println("=== I2C Diagnosis ===");
-    
-    // Scan I2C bus
-    Serial.println("Scanning I2C bus...");
-    int deviceCount = 0;
-    for (byte address = 1; address < 127; address++) {
-        Wire.beginTransmission(address);
-        byte error = Wire.endTransmission();
-        if (error == 0) {
-            Serial.printf("I2C device found at address 0x%02X\n", address);
-            deviceCount++;
-        }
-    }
-    
-    if (deviceCount == 0) {
-        Serial.println("No I2C devices found!");
+    // Initialize PMU
+    if (PMU.begin(Wire, AXP2101_SLAVE_ADDRESS, BOARD_I2C_SDA, BOARD_I2C_SCL)) {
+        Serial.println("PMU initialized");
+        pmuInitialized = true;
+        
+        // Set up PMU
+        PMU.setDC3Voltage(3000);  // Set DC3 to 3.0V
+        PMU.enableDC3();
+        PMU.setALDO2Voltage(3300); // Set ALDO2 to 3.3V
+        PMU.enableALDO2();
+        PMU.setALDO3Voltage(2800); // Set ALDO3 to 2.8V
+        PMU.enableALDO3();
+        PMU.setALDO4Voltage(2800); // Set ALDO4 to 2.8V
+        PMU.enableALDO4();
+        
+        // Read initial battery info
+        readBatteryInfo();
+        
         display.setCursor(20, 140);
-        display.println("I2C: NO DEVICES");
+        display.println("PMU: OK");
     } else {
-        Serial.printf("Found %d I2C device(s)\n", deviceCount);
-        
-        // Try to initialize PMU at common addresses
-        byte pmuAddresses[] = {0x34, 0x35, 0x36, 0x37, 0x38, 0x39, 0x3A, 0x3B};
-        bool pmuFound = false;
-        
-        for (int i = 0; i < 8; i++) {
-            Wire.beginTransmission(pmuAddresses[i]);
-            byte error = Wire.endTransmission();
-            if (error == 0) {
-                Serial.printf("Trying PMU at address 0x%02X\n", pmuAddresses[i]);
-                if (PMU.begin(Wire, pmuAddresses[i], BOARD_I2C_SDA, BOARD_I2C_SCL)) {
-                    Serial.println("PMU initialized successfully!");
-                    display.setCursor(20, 140);
-                    display.println("PMU: OK");
-                    pmuFound = true;
-                    pmuInitialized = true;
-                    break;
-                } else {
-                    Serial.printf("PMU init failed at 0x%02X\n", pmuAddresses[i]);
-                }
-            }
-        }
-        
-        if (!pmuFound) {
-            Serial.println("PMU initialization failed on all addresses");
-            display.setCursor(20, 140);
-            display.println("PMU: INIT FAIL");
-        }
+        Serial.println("PMU initialization failed on all addresses");
+        display.setCursor(20, 140);
+        display.println("PMU: INIT FAIL");
     }
     
     // Initialize BMA423
@@ -417,6 +509,8 @@ void setup()
         display.println("BMA: FAIL");
     }
     
+
+    
     // Initialize RTC
     if (RTC.begin(Wire, PCF8563_SLAVE_ADDRESS, BOARD_I2C_SDA, BOARD_I2C_SCL)) {
         Serial.println("RTC initialized");
@@ -432,7 +526,7 @@ void setup()
     
     // Load WiFi configuration and try to connect
     Serial.println("Loading WiFi configuration...");
-    display.fillScreen(COLOR_BACKGROUND);
+    display.fillScreen(COLOR_BLACK);
     display.setCursor(20, 80);
     display.println("Loading WiFi...");
     
@@ -445,7 +539,7 @@ void setup()
         
         // Try to connect to WiFi networks
         Serial.println("Connecting to WiFi...");
-        display.fillScreen(COLOR_BACKGROUND);
+        display.fillScreen(COLOR_BLACK);
         display.setCursor(20, 80);
         display.println("Connecting WiFi...");
         
@@ -488,16 +582,33 @@ void setup()
     
     delay(2000);
     
+    // Load weather configuration
+    Serial.println("Loading weather configuration...");
+    display.fillScreen(COLOR_BLACK);
+    display.setCursor(20, 80);
+    display.println("Loading Weather Config...");
+    
+    if (loadWeatherConfig()) {
+        Serial.println("Weather configuration loaded successfully");
+        display.setCursor(20, 110);
+        display.println("Weather Config: OK");
+    } else {
+        Serial.println("Failed to load weather configuration!");
+        display.setCursor(20, 110);
+        display.println("Weather Config: FAIL");
+    }
+    
+    delay(1000);
+    
+    // Load WiFi image
+    loadWiFiImage();
+    
     // Initialize sleep mode
     lastActivity = millis();
     Serial.println("Sleep mode initialized");
     
     Serial.println("Setup completed!");
 }
-
-// Removed Pip-Boy border, header, and menu bar functions as they're not needed for the custom interface
-
-// Removed Pip-Boy battery icon function as it's not needed for the custom interface
 
 void drawStepsIcon(int x, int y) {
     // Draw pixelated steps/footprint icon
@@ -525,33 +636,67 @@ void drawTimeSeparator(int x, int y) {
 }
 
 void formatTimeString(char* timeStr, int hour, int minute) {
-    if (use12HourFormat) {
-        // Format: 12-hour with AM/PM (no seconds)
-        int hour12 = hour % 12;
-        if (hour12 == 0) hour12 = 12;
-        const char* ampm = (hour >= 12) ? "PM" : "AM";
-        sprintf(timeStr, "%02d:%02d %s", hour12, minute, ampm);
-    } else {
-        // Format: 24-hour (no seconds)
-        sprintf(timeStr, "%02d:%02d", hour, minute);
-    }
+    // Format: 24-hour with leading zeros (no seconds)
+    sprintf(timeStr, "%02d:%02d", hour, minute);
 }
 
 
 
-void drawCustomWiFiIcon(int x, int y) {
-    // Draw custom WiFi icon in red
-    int iconSize = 16;
+void drawWiFiIcon(int x, int y, bool isConnected) {
+    if (wifiImageLoaded) {
+        // Draw the PNG image with color tinting
+        Serial.printf("Drawing PNG WiFi icon at (%d,%d), connected: %s\n", 
+                     x, y, isConnected ? "YES" : "NO");
+        
+        // For now, we'll use the vector icon as fallback
+        // The PNG tinting will be implemented in a future version
+        drawVectorWiFiIcon(x, y, isConnected);
+    } else {
+        // Use vector graphics as fallback
+        drawVectorWiFiIcon(x, y, isConnected);
+    }
+}
+
+void drawVectorWiFiIcon(int x, int y, bool isConnected) {
+    uint16_t iconColor = isConnected ? TFT_GREEN : TFT_RED;
     
-    // WiFi signal lines (custom style)
-    display.fillRect(x - 4, y + 8, 2, 2, COLOR_CUSTOM_TEXT);   // Bottom dot
-    display.fillRect(x - 2, y + 6, 2, 2, COLOR_CUSTOM_TEXT);   // Middle dot
-    display.fillRect(x, y + 4, 2, 2, COLOR_CUSTOM_TEXT);       // Top dot
+    // Draw a more sophisticated WiFi icon using vector graphics
+    int iconSize = 24;
+    int centerX = x;
+    int centerY = y;
     
-    // WiFi arcs (custom style)
-    display.fillRect(x - 5, y + 7, 2, 1, COLOR_CUSTOM_TEXT);   // Bottom arc
-    display.fillRect(x - 3, y + 5, 2, 1, COLOR_CUSTOM_TEXT);   // Middle arc
-    display.fillRect(x - 1, y + 3, 2, 1, COLOR_CUSTOM_TEXT);   // Top arc
+    // Draw WiFi signal arcs (semi-circles)
+    for (int i = 0; i < 3; i++) {
+        int radius = 8 + i * 4;  // 8, 12, 16
+        int startAngle = 45;     // Start at 45 degrees
+        int endAngle = 135;      // End at 135 degrees
+        
+        // Draw arc using multiple line segments
+        for (int angle = startAngle; angle <= endAngle; angle += 5) {
+            int x1 = centerX + (radius - 1) * cos(angle * PI / 180);
+            int y1 = centerY + (radius - 1) * sin(angle * PI / 180);
+            int x2 = centerX + (radius + 1) * cos(angle * PI / 180);
+            int y2 = centerY + (radius + 1) * sin(angle * PI / 180);
+            
+            display.drawLine(x1, y1, x2, y2, iconColor);
+        }
+    }
+    
+    // Draw center dot
+    display.fillCircle(centerX, centerY, 2, iconColor);
+    
+    // Draw connection status indicator
+    if (isConnected) {
+        // Green dot for connected
+        display.fillCircle(centerX, centerY + 12, 2, TFT_GREEN);
+    } else {
+        // Red X for disconnected
+        display.drawLine(centerX - 3, centerY + 9, centerX + 3, centerY + 15, TFT_RED);
+        display.drawLine(centerX + 3, centerY + 9, centerX - 3, centerY + 15, TFT_RED);
+    }
+    
+    Serial.printf("Drew vector WiFi icon at (%d,%d), color: %s\n", 
+                 x, y, isConnected ? "GREEN" : "RED");
 }
 
 void enterSleepMode() {
@@ -580,10 +725,7 @@ void exitSleepMode() {
         }
         
         // Force complete redraw
-        forceRedraw = true;
-        
-        // Redraw the interface completely
-        drawCustomInterface();
+        needsFullRedraw = true;
     }
 }
 
@@ -660,104 +802,356 @@ void manageSleepMode() {
     checkActivity();
 }
 
-void drawCustomInterface()
-{
-    // Get current time
-    if (!getLocalTime(&timeinfo)) {
-        display.fillScreen(COLOR_BACKGROUND);
-        display.setTextColor(COLOR_CUSTOM_WARNING);
-        display.setTextSize(2);
-        display.setCursor(20, 100);
-        display.println("NO SIGNAL");
+// Function to load WiFi image from assets
+bool loadWiFiImage() {
+    if (wifiImageLoaded) return true;
+    
+    Serial.println("Loading WiFi image from assets...");
+    
+    // For now, we'll use the vector icon approach
+    // PNG loading will be implemented when compatibility issues are resolved
+    Serial.println("Using vector WiFi icon (PNG loading temporarily disabled)");
+    wifiImageLoaded = true;
+    return true;
+}
+
+// Function to get weather data from OpenWeatherMap API
+void getWeatherData() {
+    if (!wifiConnected) {
+        Serial.println("WiFi not connected, cannot get weather data");
         return;
     }
     
-    // Only redraw everything on first run or when date changes
-    static int lastDay = -1;
-    static int lastHour = -1;
-    static int lastMinute = -1;
+    if (!weatherConfigLoaded) {
+        Serial.println("Weather configuration not loaded, cannot get weather data");
+        return;
+    }
     
-    if (forceRedraw || lastDay != timeinfo.tm_mday || lastHour != timeinfo.tm_hour || lastMinute != timeinfo.tm_min) {
-        // Clear screen and draw background
-        display.fillScreen(COLOR_BACKGROUND);
+    // Check if it's time to update weather
+    if (millis() - lastWeatherUpdate < weatherUpdateInterval) {
+        return;
+    }
+    
+    Serial.println("Getting weather data...");
+    
+    // Create HTTP client
+    HTTPClient http;
+    
+    // Build location string (city,country)
+    String location = weatherCity;
+    if (weatherCountry.length() > 0) {
+        location += "," + weatherCountry;
+    }
+    
+    // OpenWeatherMap API URL with configuration
+    String url = "http://api.openweathermap.org/data/2.5/weather?q=" + location + "&appid=" + weatherApiKey + "&units=" + weatherUnits;
+    
+    Serial.printf("Weather API URL: %s\n", url.c_str());
+    
+    http.begin(url);
+    int httpCode = http.GET();
+    
+    if (httpCode == HTTP_CODE_OK) {
+        String payload = http.getString();
+        Serial.println("Weather data received");
         
-        // TODO: Load and display toywatch-darkgrey-alpha.png background
-        // For now, we'll use a solid background
-        
-        // 1. DAY_OF_WEEK - Centralizado horizontalmente
-        char dayStr[20];
-        const char* days[] = {"SUNDAY", "MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY"};
-        sprintf(dayStr, "%s", days[timeinfo.tm_wday]);
-        display.setTextColor(COLOR_CUSTOM_TEXT);
-        display.setFont(&fonts::FreeSansBold12pt7b);
-        display.setCursor(120 - (strlen(dayStr) * 15), 30);
-        display.println(dayStr);
-        
-        // 2. DATE - Centralizado horizontalmente
-        char dateStr[20];
-        const char* months[] = {"JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"};
-        sprintf(dateStr, "%02d %s", timeinfo.tm_mday, months[timeinfo.tm_mon]);
-        display.setFont(&fonts::FreeSansBold12pt7b);
-        display.setCursor(120 - (strlen(dateStr) * 15), 58);
-        display.println(dateStr);
-        
-        // 3. TIME - Centralizado
-        char timeStr[20];
-        formatTimeString(timeStr, timeinfo.tm_hour, timeinfo.tm_min);
-        display.setFont(&fonts::FreeSansBold24pt7b);
-        display.setCursor(120 - (strlen(timeStr) * 36), 120);
-        display.println(timeStr);
-        
-        // 4. TEMPERATURE - Alinhado à esquerda
-        // TODO: Implementar leitura de temperatura do sensor
-        char tempStr[10];
-        sprintf(tempStr, "21°C");  // Placeholder
-        display.setFont(&fonts::FreeSansBold12pt7b);
-        display.setCursor(45, 195);
-        display.println(tempStr);
-        
-        // 5. WIFI_STATUS_ICON - Centralizado horizontalmente
-        if (wifiConnected) {
-            // Draw WiFi icon
-            drawCustomWiFiIcon(120, 195);
-        } else {
-            // Draw disconnected icon (X)
-            display.setFont(&fonts::FreeSansBold12pt7b);
-            display.setCursor(120 - 15, 195);
-            display.println("X");
+        // Parse JSON response (simplified parsing)
+        int tempIndex = payload.indexOf("\"temp\":");
+        if (tempIndex > 0) {
+            int tempStart = payload.indexOf(":", tempIndex) + 1;
+            int tempEnd = payload.indexOf(",", tempStart);
+            if (tempEnd == -1) tempEnd = payload.indexOf("}", tempStart);
+            
+            String tempStr = payload.substring(tempStart, tempEnd);
+            weatherTemperature = tempStr.toFloat();
+            
+            Serial.printf("Weather temperature: %.1f°C\n", weatherTemperature);
+            weatherInitialized = true;
         }
         
-        // 6. BATTERY_PERCENTAGE - Alinhado à direita
-        char batteryStr[10];
-        sprintf(batteryStr, "%d%%", batteryPercent);
-        display.setFont(&fonts::FreeSansBold12pt7b);
-        display.setCursor(195 - (strlen(batteryStr) * 15), 195);
-        display.println(batteryStr);
+        // Parse weather description
+        int descIndex = payload.indexOf("\"description\":\"");
+        if (descIndex > 0) {
+            int descStart = descIndex + 15;
+            int descEnd = payload.indexOf("\"", descStart);
+            weatherDescription = payload.substring(descStart, descEnd);
+            Serial.printf("Weather description: %s\n", weatherDescription.c_str());
+        }
         
-        lastDay = timeinfo.tm_mday;
-        lastHour = timeinfo.tm_hour;
-        lastMinute = timeinfo.tm_min;
-        
-        // Reset force redraw flag
-        forceRedraw = false;
+    } else {
+        Serial.printf("HTTP request failed, error: %d\n", httpCode);
     }
     
-    // Update time when minutes change (no more seconds update)
-    static int lastMinuteUpdate = -1;
-    if (lastMinuteUpdate != timeinfo.tm_min) {
-        // Clear and redraw time area
-        display.fillRect(120 - 72, 120, 144, 48, COLOR_BACKGROUND);
-        
-        // Redraw time with new minutes
-        char timeStr[20];
-        formatTimeString(timeStr, timeinfo.tm_hour, timeinfo.tm_min);
-        display.setTextColor(COLOR_CUSTOM_TEXT);
-        display.setFont(&fonts::FreeSansBold24pt7b);
-        display.setCursor(120 - (strlen(timeStr) * 36), 120);
-        display.println(timeStr);
-        
-        lastMinuteUpdate = timeinfo.tm_min;
+    http.end();
+    lastWeatherUpdate = millis();
+}
+
+
+
+// Function to draw text with TrueType fonts using LovyanGFX native fonts
+void drawTrueTypeText(const char* text, int x, int y, int fontSize, uint16_t color) {
+    display.setTextColor(color);
+    
+    // Use LovyanGFX native fonts with TrueType-like quality
+    switch(fontSize) {
+        case 1: // Small text (status, battery, etc.) - 6x8 pixels
+            display.setFont(&fonts::Font0);
+            display.setTextSize(1);
+            break;
+        case 2: // Medium text (date, day, etc.) - 12x16 pixels
+            display.setFont(&fonts::Font2);
+            display.setTextSize(1);
+            break;
+        case 3: // Large text (time) - 16x24 pixels
+            display.setFont(&fonts::Font4);
+            display.setTextSize(1);
+            break;
+        case 4: // Extra large text (main time) - 20x32 pixels
+            display.setFont(&fonts::Font6);
+            display.setTextSize(1);
+            break;
+        case 5: // Super large text (main time - 30% bigger) - 26x42 pixels
+            display.setFont(&fonts::Font6);
+            display.setTextSize(1.3); // 30% bigger
+            break;
+        default:
+            display.setFont(&fonts::Font2);
+            display.setTextSize(1);
+            break;
     }
+    
+    display.setCursor(x, y);
+    display.print(text);
+}
+
+// Function to get text width with TrueType font
+int getTrueTypeTextWidth(const char* text, int fontSize) {
+    // Select font temporarily to measure
+    switch(fontSize) {
+        case 1:
+            display.setFont(&fonts::Font0);
+            display.setTextSize(1);
+            break;
+        case 2:
+            display.setFont(&fonts::Font2);
+            display.setTextSize(1);
+            break;
+        case 3:
+            display.setFont(&fonts::Font4);
+            display.setTextSize(1);
+            break;
+        case 4:
+            display.setFont(&fonts::Font6);
+            display.setTextSize(1);
+            break;
+        case 5:
+            display.setFont(&fonts::Font6);
+            display.setTextSize(1.3);
+            break;
+        default:
+            display.setFont(&fonts::Font2);
+            display.setTextSize(1);
+            break;
+    }
+    
+    return display.textWidth(text);
+}
+
+// Function to get font height with TrueType font
+int getTrueTypeFontHeight(int fontSize) {
+    // Select font temporarily to measure
+    switch(fontSize) {
+        case 1:
+            display.setFont(&fonts::Font0);
+            display.setTextSize(1);
+            break;
+        case 2:
+            display.setFont(&fonts::Font2);
+            display.setTextSize(1);
+            break;
+        case 3:
+            display.setFont(&fonts::Font4);
+            display.setTextSize(1);
+            break;
+        case 4:
+            display.setFont(&fonts::Font6);
+            display.setTextSize(1);
+            break;
+        case 5:
+            display.setFont(&fonts::Font6);
+            display.setTextSize(1.3);
+            break;
+        default:
+            display.setFont(&fonts::Font2);
+            display.setTextSize(1);
+            break;
+    }
+    
+    return display.fontHeight();
+}
+
+// Updated drawCustomInterface function with TrueType fonts
+void drawCustomInterface() {
+    if (displaySleep) return;
+    
+    // Get current time
+    if (!getLocalTime(&timeinfo)) {
+        Serial.println("Failed to obtain time");
+        return;
+    }
+    
+    // Format time string - Always 24h format with leading zeros
+    char timeStr[20];
+    sprintf(timeStr, "%02d:%02d", timeinfo.tm_hour, timeinfo.tm_min);
+    
+    // Format date string
+    char dateStr[20];
+    sprintf(dateStr, "%02d/%02d", timeinfo.tm_mday, timeinfo.tm_mon + 1);
+    
+    // Format day string
+    char dayStr[20];
+    const char* days[] = {"DOM", "SEG", "TER", "QUA", "QUI", "SEX", "SAB"};
+    strcpy(dayStr, days[timeinfo.tm_wday]);
+    
+    // Format battery string
+    char batteryStr[16];
+    sprintf(batteryStr, "%d%%", batteryPercent);
+    
+    // Format WiFi string
+    char wifiStr[16];
+    strcpy(wifiStr, wifiConnected ? "WiFi ON" : "WiFi OFF");
+    
+    // Check if we need to redraw
+    bool needsRedraw = needsFullRedraw || 
+                      strcmp(timeStr, lastTimeStr) != 0 ||
+                      strcmp(dateStr, lastDateStr) != 0 ||
+                      strcmp(dayStr, lastDayStr) != 0 ||
+                      batteryPercent != lastBatteryPercent ||
+                      isCharging != lastChargingState ||
+                      stepCounter != lastStepCount ||
+                      wifiConnected != lastWifiState;
+    
+    if (!needsRedraw) return;
+    
+    // Clear screen if full redraw needed
+    if (needsFullRedraw) {
+        display.fillScreen(COLOR_BACKGROUND);
+        needsFullRedraw = false;
+    }
+    
+    // Calculate positions with TrueType fonts
+    int screenWidth = display.width();
+    int screenHeight = display.height();
+    
+    // Time position (center, extra large font - 30% bigger)
+    int timeWidth = getTrueTypeTextWidth(timeStr, 5); // Using larger font
+    int timeX = (screenWidth - timeWidth) / 2;
+    int timeY = 70; // Adjusted for larger font
+    
+    // Date position (center, medium font)
+    int dateWidth = getTrueTypeTextWidth(dateStr, 2);
+    int dateX = (screenWidth - dateWidth) / 2;
+    int dateY = timeY + getTrueTypeFontHeight(4) + 10;
+    
+    // Day position (center, medium font)
+    int dayWidth = getTrueTypeTextWidth(dayStr, 2);
+    int dayX = (screenWidth - dayWidth) / 2;
+    int dayY = dateY + getTrueTypeFontHeight(2) + 5;
+    
+    // Battery position (top right, small font)
+    int batteryWidth = getTrueTypeTextWidth(batteryStr, 1);
+    int batteryX = screenWidth - batteryWidth - 10;
+    int batteryY = 10;
+    
+    // WiFi position (top left, icon)
+    int wifiX = 25;
+    int wifiY = 25;
+    
+    // Steps position (bottom, small font)
+    char stepsStr[16];
+    sprintf(stepsStr, "Steps: %lu", stepCounter);
+    int stepsWidth = getTrueTypeTextWidth(stepsStr, 1);
+    int stepsX = (screenWidth - stepsWidth) / 2;
+    int stepsY = screenHeight - getTrueTypeFontHeight(1) - 10;
+    
+    // Weather Temperature position (bottom right, small font)
+    char tempStr[16];
+    if (weatherConfigLoaded && weatherInitialized) {
+        sprintf(tempStr, "%.1f°C", weatherTemperature);
+    } else if (weatherConfigLoaded) {
+        sprintf(tempStr, "N/A");
+    } else {
+        sprintf(tempStr, "NO API");
+    }
+    int tempWidth = getTrueTypeTextWidth(tempStr, 1);
+    int tempX = screenWidth - tempWidth - 10;
+    int tempY = screenHeight - getTrueTypeFontHeight(1) - 10;
+    
+    // Clear old text areas if values changed
+    if (strcmp(timeStr, lastTimeStr) != 0) {
+        // Clear time area
+        display.fillRect(timeX - 5, timeY - 5, timeWidth + 10, getTrueTypeFontHeight(4) + 10, COLOR_BACKGROUND);
+    }
+    
+    if (strcmp(dateStr, lastDateStr) != 0) {
+        // Clear date area
+        display.fillRect(dateX - 5, dateY - 5, dateWidth + 10, getTrueTypeFontHeight(2) + 10, COLOR_BACKGROUND);
+    }
+    
+    if (strcmp(dayStr, lastDayStr) != 0) {
+        // Clear day area
+        display.fillRect(dayX - 5, dayY - 5, dayWidth + 10, getTrueTypeFontHeight(2) + 10, COLOR_BACKGROUND);
+    }
+    
+    if (batteryPercent != lastBatteryPercent || isCharging != lastChargingState) {
+        // Clear battery area
+        display.fillRect(batteryX - 5, batteryY - 5, batteryWidth + 10, getTrueTypeFontHeight(1) + 10, COLOR_BACKGROUND);
+    }
+    
+    if (wifiConnected != lastWifiState) {
+        // Clear WiFi area (larger area for icon)
+        display.fillRect(wifiX - 15, wifiY - 15, 30, 30, COLOR_BACKGROUND);
+    }
+    
+    if (stepCounter != lastStepCount) {
+        // Clear steps area
+        display.fillRect(stepsX - 5, stepsY - 5, stepsWidth + 10, getTrueTypeFontHeight(1) + 10, COLOR_BACKGROUND);
+    }
+    
+    // Draw new text with TrueType fonts
+    drawTrueTypeText(timeStr, timeX, timeY, 4, COLOR_TEXT);
+    drawTrueTypeText(dateStr, dateX, dateY, 2, COLOR_TEXT);
+    drawTrueTypeText(dayStr, dayX, dayY, 2, COLOR_TEXT);
+    
+    // Battery with color coding
+    uint16_t batteryColor = COLOR_TEXT;
+    if (batteryPercent <= 20) batteryColor = COLOR_RED;
+    else if (batteryPercent <= 50) batteryColor = COLOR_ORANGE;
+    else batteryColor = COLOR_GREEN;
+    
+    drawTrueTypeText(batteryStr, batteryX, batteryY, 1, batteryColor);
+    
+    // WiFi icon with color coding
+    drawWiFiIcon(wifiX, wifiY, wifiConnected);
+    
+    // Steps
+    drawTrueTypeText(stepsStr, stepsX, stepsY, 1, COLOR_TEXT);
+    
+    // Temperature
+    drawTrueTypeText(tempStr, tempX, tempY, 1, COLOR_TEXT);
+    
+    // Update last values
+    strcpy(lastTimeStr, timeStr);
+    strcpy(lastDateStr, dateStr);
+    strcpy(lastDayStr, dayStr);
+    lastBatteryPercent = batteryPercent;
+    lastChargingState = isCharging;
+    lastStepCount = stepCounter;
+    lastWifiState = wifiConnected;
+    
+    // Debug info
+    Serial.printf("Time: %s, Date: %s, Day: %s, Battery: %d%%, WiFi: %s, Steps: %lu, Weather: %.1f°C\n", 
+                  timeStr, dateStr, dayStr, batteryPercent, wifiStr, stepCounter, weatherTemperature);
 }
 
 void loop()
@@ -771,11 +1165,24 @@ void loop()
         static unsigned long lastBatteryRead = 0;
         if (millis() - lastBatteryRead > 5000) {
             readBatteryInfo();
+            getWeatherData();  // Get weather data
             optimizeBatteryUsage();  // Apply battery optimizations
             lastBatteryRead = millis();
         }
         
-        drawCustomInterface();  // Use the new custom interface
+        // Only redraw if something changed or forced redraw
+        bool needsUpdate = needsFullRedraw || 
+                          (timeinfo.tm_min != lastMinute) || 
+                          (timeinfo.tm_hour != lastHour) ||
+                          (timeinfo.tm_mday != lastDay) ||
+                          (timeinfo.tm_mon != lastMonth) ||
+                          (wifiConnected != lastWifiState) ||
+                          (batteryPercent != lastBatteryPercent);
+        
+        if (needsUpdate) {
+            drawCustomInterface();  // Use the optimized custom interface
+        }
+        
         delay(1000);
     } else {
         // In sleep mode, just check for activity
