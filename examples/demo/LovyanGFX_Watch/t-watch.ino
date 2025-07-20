@@ -7,7 +7,7 @@
 #include "esp_sntp.h"
 #include <FFat.h>
 #include <FS.h>
-#include "nexarustslab_font.h"
+
 
 // Board pin definitions (from Setup212_LilyGo_T_Watch_S3.h)
 #define BOARD_LCD_SCLK    18  // TFT_SCLK
@@ -337,9 +337,7 @@ void setup()
     display.setRotation(2);  // Fix inverted display
     display.setBrightness(128);
     
-    // Setup custom NexaRustSlab font
-    setupNexaRustSlabFont();
-    Serial.println("Display configured with NexaRustSlab font");
+    Serial.println("Display configured with default fonts");
     
     // Show initial screen
     display.fillScreen(COLOR_BACKGROUND);
@@ -539,11 +537,7 @@ void formatTimeString(char* timeStr, int hour, int minute) {
     }
 }
 
-void setupNexaRustSlabFont() {
-    // Set the real NexaRustSlab font
-    setupNexaRustSlabFont(display);
-    Serial.println("NexaRustSlab font loaded successfully");
-}
+
 
 void drawCustomWiFiIcon(int x, int y) {
     // Draw custom WiFi icon in red
@@ -694,32 +688,32 @@ void drawCustomInterface()
         char dayStr[20];
         const char* days[] = {"SUNDAY", "MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY"};
         sprintf(dayStr, "%s", days[timeinfo.tm_wday]);
-        display.setTextColor(COLOR_CUSTOM_TEXT);  // Vermelho puro
-        setupNexaRustSlabFontSmall(display);  // Use smaller bold font
-        display.setCursor(120 - (strlen(dayStr) * 25), 20);  // Centralizado para fonte 50px
+        display.setTextColor(COLOR_CUSTOM_TEXT);
+        display.setFont(&fonts::FreeSansBold12pt7b);
+        display.setCursor(120 - (strlen(dayStr) * 15), 30);
         display.println(dayStr);
         
         // 2. DATE - Centralizado horizontalmente
         char dateStr[20];
         const char* months[] = {"JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"};
         sprintf(dateStr, "%02d %s", timeinfo.tm_mday, months[timeinfo.tm_mon]);
-        setupNexaRustSlabFontSmall(display);  // Use smaller bold font
-        display.setCursor(120 - (strlen(dateStr) * 25), 70);  // Centralizado para fonte 50px
+        display.setFont(&fonts::FreeSansBold12pt7b);
+        display.setCursor(120 - (strlen(dateStr) * 15), 58);
         display.println(dateStr);
         
         // 3. TIME - Centralizado
         char timeStr[20];
         formatTimeString(timeStr, timeinfo.tm_hour, timeinfo.tm_min);
-        setupNexaRustSlabFontLarge(display);  // Use large bold font
-        display.setCursor(120 - (strlen(timeStr) * 50), 130);  // Centralizado para fonte 50px
+        display.setFont(&fonts::FreeSansBold24pt7b);
+        display.setCursor(120 - (strlen(timeStr) * 36), 120);
         display.println(timeStr);
         
         // 4. TEMPERATURE - Alinhado à esquerda
         // TODO: Implementar leitura de temperatura do sensor
         char tempStr[10];
         sprintf(tempStr, "21°C");  // Placeholder
-        setupNexaRustSlabFontSmall(display);  // Use smaller bold font
-        display.setCursor(30, 200);
+        display.setFont(&fonts::FreeSansBold12pt7b);
+        display.setCursor(45, 195);
         display.println(tempStr);
         
         // 5. WIFI_STATUS_ICON - Centralizado horizontalmente
@@ -728,7 +722,7 @@ void drawCustomInterface()
             drawCustomWiFiIcon(120, 195);
         } else {
             // Draw disconnected icon (X)
-            setupNexaRustSlabFontSmall(display);
+            display.setFont(&fonts::FreeSansBold12pt7b);
             display.setCursor(120 - 15, 195);
             display.println("X");
         }
@@ -736,8 +730,8 @@ void drawCustomInterface()
         // 6. BATTERY_PERCENTAGE - Alinhado à direita
         char batteryStr[10];
         sprintf(batteryStr, "%d%%", batteryPercent);
-        setupNexaRustSlabFontSmall(display);  // Use smaller bold font
-        display.setCursor(210 - (strlen(batteryStr) * 25), 200);
+        display.setFont(&fonts::FreeSansBold12pt7b);
+        display.setCursor(195 - (strlen(batteryStr) * 15), 195);
         display.println(batteryStr);
         
         lastDay = timeinfo.tm_mday;
@@ -752,14 +746,14 @@ void drawCustomInterface()
     static int lastMinuteUpdate = -1;
     if (lastMinuteUpdate != timeinfo.tm_min) {
         // Clear and redraw time area
-        display.fillRect(120 - 100, 130, 200, 60, COLOR_BACKGROUND);
+        display.fillRect(120 - 72, 120, 144, 48, COLOR_BACKGROUND);
         
         // Redraw time with new minutes
         char timeStr[20];
         formatTimeString(timeStr, timeinfo.tm_hour, timeinfo.tm_min);
         display.setTextColor(COLOR_CUSTOM_TEXT);
-        setupNexaRustSlabFontLarge(display);  // Use large bold font
-        display.setCursor(120 - (strlen(timeStr) * 50), 130);
+        display.setFont(&fonts::FreeSansBold24pt7b);
+        display.setCursor(120 - (strlen(timeStr) * 36), 120);
         display.println(timeStr);
         
         lastMinuteUpdate = timeinfo.tm_min;
