@@ -749,7 +749,7 @@ void setup()
         
         // Force immediate weather update after successful config load
         lastWeatherUpdate = 0;
-        Serial.println("Weather update forced for initial load");
+        Serial.printf("Weather update forced for initial load. lastWeatherUpdate set to: %lu\n", lastWeatherUpdate);
     } else {
         Serial.println("Failed to load weather configuration!");
         display.setCursor(20, 110);
@@ -1265,9 +1265,18 @@ void getWeatherData() {
     }
     
     // Check if it's time to update weather
-    if (millis() - lastWeatherUpdate < weatherUpdateInterval) {
+    unsigned long currentTime = millis();
+    unsigned long timeSinceUpdate = (currentTime >= lastWeatherUpdate) ? 
+                                   (currentTime - lastWeatherUpdate) : 
+                                   (0xFFFFFFFF - lastWeatherUpdate + currentTime);
+    
+    Serial.printf("Weather check: millis()=%lu, lastWeatherUpdate=%lu, interval=%lu\n", 
+                 currentTime, lastWeatherUpdate, weatherUpdateInterval);
+    Serial.printf("Time since last update: %lu ms\n", timeSinceUpdate);
+    
+    if (timeSinceUpdate < weatherUpdateInterval) {
         Serial.printf("Weather update not due yet. Next update in %lu ms\n", 
-                     weatherUpdateInterval - (millis() - lastWeatherUpdate));
+                     weatherUpdateInterval - timeSinceUpdate);
         return;
     }
     
