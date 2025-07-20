@@ -238,32 +238,32 @@ bool loadWeatherConfig() {
         }
         
         // Parse API key
-        if (line.startsWith("weather_api_key=")) {
+        if (line.startsWith("api_key=")) {
             weatherApiKey = getValue(line, '=', 1);
             Serial.println("Weather API key loaded");
         }
         
         // Parse city
-        if (line.startsWith("weather_city=")) {
+        if (line.startsWith("city=")) {
             weatherCity = getValue(line, '=', 1);
             Serial.printf("Weather city: %s\n", weatherCity.c_str());
         }
         
         // Parse country
-        if (line.startsWith("weather_country=")) {
+        if (line.startsWith("country=")) {
             weatherCountry = getValue(line, '=', 1);
             Serial.printf("Weather country: %s\n", weatherCountry.c_str());
         }
         
         // Parse update interval
-        if (line.startsWith("weather_update_interval=")) {
+        if (line.startsWith("update_interval=")) {
             String intervalStr = getValue(line, '=', 1);
-            weatherUpdateInterval = intervalStr.toInt();
+            weatherUpdateInterval = intervalStr.toInt() * 1000; // Convert seconds to milliseconds
             Serial.printf("Weather update interval: %lu ms\n", weatherUpdateInterval);
         }
         
         // Parse units
-        if (line.startsWith("weather_units=")) {
+        if (line.startsWith("units=")) {
             weatherUnits = getValue(line, '=', 1);
             Serial.printf("Weather units: %s\n", weatherUnits.c_str());
         }
@@ -650,18 +650,23 @@ void drawWiFiIcon(int x, int y, bool isConnected) {
         Serial.printf("Drawing PNG WiFi icon at (%d,%d), connected: %s\n", 
                      x, y, isConnected ? "YES" : "NO");
         
+        // Adjust position to center the PNG (18x15 pixels)
+        int pngX = x - 9;  // Center horizontally (18/2 = 9)
+        int pngY = y - 7;  // Center vertically (15/2 = 7)
+        
         bool success = false;
         
         if (isConnected) {
             // Draw green WiFi icon
-            success = display.drawPng(data_assets_wifi_green_png, data_assets_wifi_green_png_len, x, y);
+            success = display.drawPng(data_assets_wifi_green_png, data_assets_wifi_green_png_len, pngX, pngY);
         } else {
             // Draw red WiFi icon (original)
-            success = display.drawPng(data_assets_wifi_small_png, data_assets_wifi_small_png_len, x, y);
+            success = display.drawPng(data_assets_wifi_small_png, data_assets_wifi_small_png_len, pngX, pngY);
         }
         
         if (success) {
-            Serial.printf("PNG WiFi icon drawn successfully (%s)!\n", isConnected ? "GREEN" : "RED");
+            Serial.printf("PNG WiFi icon drawn successfully (%s) at (%d,%d)!\n", 
+                         isConnected ? "GREEN" : "RED", pngX, pngY);
             return;
         } else {
             Serial.println("Failed to draw PNG, using vector fallback");
@@ -851,10 +856,14 @@ void getWeatherData() {
     
     // Check if it's time to update weather
     if (millis() - lastWeatherUpdate < weatherUpdateInterval) {
+        Serial.printf("Weather update not due yet. Next update in %lu ms\n", 
+                     weatherUpdateInterval - (millis() - lastWeatherUpdate));
         return;
     }
     
     Serial.println("Getting weather data...");
+    Serial.printf("City: %s, Country: %s, Units: %s\n", 
+                 weatherCity.c_str(), weatherCountry.c_str(), weatherUnits.c_str());
     
     // Create HTTP client
     HTTPClient http;
@@ -871,11 +880,15 @@ void getWeatherData() {
     Serial.printf("Weather API URL: %s\n", url.c_str());
     
     http.begin(url);
+    http.setTimeout(10000); // 10 second timeout
+    
     int httpCode = http.GET();
+    Serial.printf("HTTP response code: %d\n", httpCode);
     
     if (httpCode == HTTP_CODE_OK) {
         String payload = http.getString();
-        Serial.println("Weather data received");
+        Serial.printf("Weather data received, payload length: %d\n", payload.length());
+        Serial.printf("Payload preview: %s\n", payload.substring(0, 200).c_str());
         
         // Parse JSON response (simplified parsing)
         int tempIndex = payload.indexOf("\"temp\":");
@@ -889,6 +902,9 @@ void getWeatherData() {
             
             Serial.printf("Weather temperature: %.1f°C\n", weatherTemperature);
             weatherInitialized = true;
+        } else {
+            Serial.println("Temperature not found in response");
+            Serial.printf("Full response: %s\n", payload.c_str());
         }
         
         // Parse weather description
@@ -902,10 +918,13 @@ void getWeatherData() {
         
     } else {
         Serial.printf("HTTP request failed, error: %d\n", httpCode);
+        String errorPayload = http.getString();
+        Serial.printf("Error response: %s\n", errorPayload.c_str());
     }
     
     http.end();
     lastWeatherUpdate = millis();
+    Serial.printf("Weather update completed. Next update in %lu ms\n", weatherUpdateInterval);
 }
 
 
