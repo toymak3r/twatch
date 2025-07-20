@@ -1,5 +1,5 @@
-<h1 align = "center">🌟LilyGO T-Watch🌟</h1>
-
+<h1 align = "center">🌟Edward Watch🌟</h1>
+based on: LilyGO T-Watch
 
 [![PlatformIO CI](https://github.com/Xinyuan-LilyGO/TTGO_TWatch_Library/actions/workflows/platformio.yml/badge.svg)](https://github.com/Xinyuan-LilyGO/TTGO_TWatch_Library/actions/workflows/platformio.yml)
 [![Arduino_CI](https://github.com/Xinyuan-LilyGO/TTGO_TWatch_Library/actions/workflows/arduino_ci.yml/badge.svg?branch=t-watch-s3)](https://github.com/Xinyuan-LilyGO/TTGO_TWatch_Library/actions/workflows/arduino_ci.yml)
@@ -77,6 +77,8 @@ cd examples/demo/LovyanGFX_Watch/
 pio run -e twatch-s3 --target upload
 ```
 
+**📖 [Complete Documentation](docs/examples/weather-wifi-watch.md)**
+
 ### 📱 BLE Notifications (`examples/demo/NotificationBLE/notification_ble.ino`)
 **Receive smartphone notifications via BLE without additional apps**
 - ✅ **BLE GATT Server**: Receives notifications from Android/iOS
@@ -91,6 +93,8 @@ cd examples/demo/NotificationBLE/
 pio run -e twatch-s3 --target upload -f notification_ble.ino
 ```
 
+**📖 [Complete Documentation](docs/examples/ble-notifications.md)**
+
 ### 📁 Other Examples
 - **display directory**: Examples from [TFT_eSPI](https://github.com/Bodmer/TFT_eSPI/tree/master/examples)
 - **lvgl directory**: Examples from [lvgl](https://github.com/lvgl/lvgl/tree/master/examples)
@@ -99,6 +103,8 @@ pio run -e twatch-s3 --target upload -f notification_ble.ino
 
 
 <h2 align = "left">5️⃣ Configuration </h2>
+
+**📖 [Complete Setup Guide](docs/configuration/setup-guide.md)**
 
 ### 🌤️ Weather Configuration
 Create `data/weather_config.ini` for weather data:
@@ -144,6 +150,8 @@ pio run -e twatch-s3 --target uploadfs
 
 
 <h2 align = "left">7️⃣ FAQ </h2>
+
+**📖 [Complete Troubleshooting Guide](docs/troubleshooting/troubleshooting.md)**
 
 ### 🔧 General Issues
 1. **Unable to upload to watch**
@@ -207,6 +215,30 @@ Please follow the steps below
 7. **esp_vad.h: No such file or directory**
    * **Please use 2.0.9. The new version has changed too much and has not yet been adapted.**
 
+
+## 8️⃣ Documentation
+
+**📚 [Complete Documentation](docs/README.md)**
+
+### 📖 Quick Links
+- [Setup Guide](docs/configuration/setup-guide.md) - Installation and configuration
+- [Weather & WiFi Watch](docs/examples/weather-wifi-watch.md) - Main firmware documentation
+- [BLE Notifications](docs/examples/ble-notifications.md) - BLE notification system
+- [Troubleshooting](docs/troubleshooting/troubleshooting.md) - Problem-solving guide
+
+### 📁 Documentation Structure
+```
+docs/
+├── README.md                    # Documentation index
+├── configuration/              # Setup and configuration guides
+│   └── setup-guide.md         # Complete setup guide
+├── examples/                   # Example documentation
+│   ├── weather-wifi-watch.md  # Weather & WiFi Watch
+│   ├── ble-notifications.md   # BLE Notifications
+│   └── android-app-guide.md   # Android app guide
+└── troubleshooting/           # Problem-solving guides
+    └── troubleshooting.md     # Complete troubleshooting
+```
 
 ## 3️⃣Use reference
 
