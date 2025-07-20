@@ -661,15 +661,14 @@ void drawVectorWiFiIcon(int x, int y, bool isConnected) {
     uint16_t iconColor = isConnected ? TFT_GREEN : TFT_RED;
     
     // Draw a more sophisticated WiFi icon using vector graphics
-    int iconSize = 24;
     int centerX = x;
     int centerY = y;
     
-    // Draw WiFi signal arcs (semi-circles)
+    // Draw WiFi signal arcs (semi-circles) - CORRECTED ORIENTATION
     for (int i = 0; i < 3; i++) {
         int radius = 8 + i * 4;  // 8, 12, 16
-        int startAngle = 45;     // Start at 45 degrees
-        int endAngle = 135;      // End at 135 degrees
+        int startAngle = 225;    // Start at 225 degrees (bottom-left)
+        int endAngle = 315;      // End at 315 degrees (bottom-right)
         
         // Draw arc using multiple line segments
         for (int angle = startAngle; angle <= endAngle; angle += 5) {
@@ -688,11 +687,11 @@ void drawVectorWiFiIcon(int x, int y, bool isConnected) {
     // Draw connection status indicator
     if (isConnected) {
         // Green dot for connected
-        display.fillCircle(centerX, centerY + 12, 2, TFT_GREEN);
+        display.fillCircle(centerX, centerY - 12, 2, TFT_GREEN);
     } else {
         // Red X for disconnected
-        display.drawLine(centerX - 3, centerY + 9, centerX + 3, centerY + 15, TFT_RED);
-        display.drawLine(centerX + 3, centerY + 9, centerX - 3, centerY + 15, TFT_RED);
+        display.drawLine(centerX - 3, centerY - 9, centerX + 3, centerY - 15, TFT_RED);
+        display.drawLine(centerX + 3, centerY - 9, centerX - 3, centerY - 15, TFT_RED);
     }
     
     Serial.printf("Drew vector WiFi icon at (%d,%d), color: %s\n", 
@@ -808,11 +807,46 @@ bool loadWiFiImage() {
     
     Serial.println("Loading WiFi image from assets...");
     
-    // For now, we'll use the vector icon approach
-    // PNG loading will be implemented when compatibility issues are resolved
-    Serial.println("Using vector WiFi icon (PNG loading temporarily disabled)");
-    wifiImageLoaded = true;
-    return true;
+    // Try to load the optimized image from FFat
+    if (FFat.exists("/assets/wifi_small.png")) {
+        Serial.println("WiFi image file found, attempting PNG load...");
+        
+        // Create a File object and use it directly
+        File file = FFat.open("/assets/wifi_small.png", "r");
+        if (file) {
+            Serial.printf("WiFi image file opened, size: %d bytes\n", file.size());
+            
+            // Try to load using raw file data
+            uint8_t* buffer = (uint8_t*)malloc(file.size());
+            if (buffer) {
+                file.read(buffer, file.size());
+                file.close();
+                
+                // Use LovyanGFX's drawPng function with raw data
+                bool success = display.drawPng(buffer, file.size(), 0, 0, 32, 32, 0, 0, 1.0f, 1.0f, datum_t::top_left);
+                
+                free(buffer);
+                
+                if (success) {
+                    wifiImageLoaded = true;
+                    Serial.println("WiFi PNG image loaded successfully!");
+                    return true;
+                } else {
+                    Serial.println("Failed to decode WiFi PNG image");
+                }
+            } else {
+                Serial.println("Failed to allocate memory for PNG");
+                file.close();
+            }
+        } else {
+            Serial.println("Failed to open WiFi image file");
+        }
+    } else {
+        Serial.println("WiFi image file not found in /assets/wifi_small.png");
+    }
+    
+    Serial.println("Using fallback vector WiFi icon");
+    return false;
 }
 
 // Function to get weather data from OpenWeatherMap API

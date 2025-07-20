@@ -7,9 +7,11 @@
 
 # Sensitive files
 **/wifi_config.ini
+**/weather_config.ini
 **/secrets.h
 **/credentials.h
 **/data/wifi_config.ini
+**/data/weather_config.ini
 
 # Build artifacts
 build/
