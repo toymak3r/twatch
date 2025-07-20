@@ -54,16 +54,15 @@ public:
     }
 
     static uint8_t getFontHeight() {
-        return 32; // Fixed height for NexaRustSlab font
+        return 50; // Height for NexaRustSlab font (50px)
     }
 };
 
 // Function to setup the NexaRustSlab font with custom renderer
 void setupNexaRustSlabFontCustom(lgfx::LGFXBase& display) {
-    // For now, use the built-in font as fallback
-    // The custom bitmap font renderer will be integrated in a future update
-    display.setFont(&fonts::FreeSansBold24pt7b);
-    Serial.println("Using FreeSansBold24pt7b as fallback for NexaRustSlab custom font");
+    // Use the custom NexaRustSlab font directly
+    // No fallback - force use of the custom font
+    Serial.println("Setting up NexaRustSlab custom font (50px)");
 }
 
 // Function to draw text using custom NexaRustSlab font
