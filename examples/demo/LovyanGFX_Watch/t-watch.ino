@@ -24,6 +24,11 @@
 #define BOARD_LCD_RST     -1  // TFT_RST (Not connected)
 #define BOARD_LCD_BL      45  // TFT_BL (LED back-light)
 
+// Touch screen pins (from utilities.h)
+#define BOARD_TOUCH_SDA   39
+#define BOARD_TOUCH_SCL   40
+#define BOARD_TOUCH_INT   16
+
 // I2C pins (correct for T-Watch S3 - from utilities.h)
 #define BOARD_I2C_SDA     10
 #define BOARD_I2C_SCL     11
@@ -39,6 +44,7 @@ class LGFX : public lgfx::LGFX_Device
     lgfx::Panel_ST7789 _panel_instance;
     lgfx::Bus_SPI _bus_instance;
     lgfx::Light_PWM _light_instance;
+    lgfx::Touch_FT5x06 _touch_instance;
 
 public:
     LGFX(void)
@@ -81,6 +87,17 @@ public:
             cfg.pwm_channel = 7;
             _light_instance.config(cfg);
             _panel_instance.setLight(&_light_instance);
+        }
+
+        { // Touch configuration
+            auto cfg = _touch_instance.config();
+            cfg.pin_sda = BOARD_TOUCH_SDA;
+            cfg.pin_scl = BOARD_TOUCH_SCL;
+            cfg.pin_int = BOARD_TOUCH_INT;
+            cfg.i2c_addr = 0x38;
+            cfg.freq = 2500000;
+            _touch_instance.config(cfg);
+            _panel_instance.setTouch(&_touch_instance);
         }
 
         setPanel(&_panel_instance);
@@ -185,6 +202,11 @@ const unsigned long SLEEP_TIMEOUT = 10000;  // 10 seconds
 const unsigned long DEEP_SLEEP_TIMEOUT = 30000;  // 30 seconds
 bool deepSleepMode = false;
 bool forceRedraw = false;  // Flag to force complete redraw
+
+// Touch variables
+bool touchInitialized = false;
+uint16_t lastTouchX = 0, lastTouchY = 0;
+bool touchDetected = false;
 
 // NTP configuration
 #define NTP_SERVER1           "pool.ntp.org"
@@ -386,26 +408,42 @@ void readBatteryInfo() {
 void optimizeBatteryUsage() {
     if (!pmuInitialized) return;
     
-    // Adjust screen brightness based on battery level
-    if (batteryPercent <= 20) {
-        // Low battery - reduce brightness
+    // More aggressive brightness control for better battery life
+    if (batteryPercent <= 15) {
+        // Very low battery - minimal brightness
+        display.setBrightness(32);  // 12.5% brightness
+        Serial.println("Very low battery: Minimal brightness");
+    } else if (batteryPercent <= 30) {
+        // Low battery - reduced brightness
         display.setBrightness(64);  // 25% brightness
         Serial.println("Low battery: Reduced brightness");
-    } else if (batteryPercent <= 50) {
+    } else if (batteryPercent <= 60) {
         // Medium battery - moderate brightness
         display.setBrightness(128); // 50% brightness
         Serial.println("Medium battery: Moderate brightness");
     } else {
-        // High battery - full brightness
-        display.setBrightness(255); // 100% brightness
-        Serial.println("High battery: Full brightness");
+        // High battery - good brightness (not full to save power)
+        display.setBrightness(192); // 75% brightness
+        Serial.println("High battery: Good brightness");
     }
     
-    // Disable WiFi if battery is very low (optional)
+    // Disable WiFi if battery is very low
     if (batteryPercent <= 10 && wifiConnected) {
         WiFi.disconnect();
         wifiConnected = false;
         Serial.println("Very low battery: WiFi disabled");
+    }
+    
+    // Reduce CPU frequency for better battery life
+    if (batteryPercent <= 20) {
+        setCpuFrequencyMhz(80);  // Reduce to 80MHz for low battery
+        Serial.println("Low battery: CPU frequency reduced to 80MHz");
+    } else if (batteryPercent <= 50) {
+        setCpuFrequencyMhz(160); // Reduce to 160MHz for medium battery
+        Serial.println("Medium battery: CPU frequency reduced to 160MHz");
+    } else {
+        setCpuFrequencyMhz(240); // Full frequency for high battery
+        Serial.println("High battery: Full CPU frequency");
     }
 }
 
@@ -480,6 +518,18 @@ void setup()
     // Initialize I2C
     Wire.begin(BOARD_I2C_SDA, BOARD_I2C_SCL);
     Serial.println("I2C initialized");
+    
+    // Initialize touch screen
+    Wire1.begin(BOARD_TOUCH_SDA, BOARD_TOUCH_SCL);
+    Serial.println("Touch I2C initialized");
+    
+    // Test touch screen
+    if (display.getTouch(&lastTouchX, &lastTouchY)) {
+        touchInitialized = true;
+        Serial.println("Touch screen initialized successfully");
+    } else {
+        Serial.println("Touch screen initialization failed, will retry");
+    }
     
     // Initialize PMU
     if (PMU.begin(Wire, AXP2101_SLAVE_ADDRESS, BOARD_I2C_SDA, BOARD_I2C_SCL)) {
@@ -732,8 +782,21 @@ void enterSleepMode() {
     if (!displaySleep) {
         Serial.println("Entering sleep mode...");
         displaySleep = true;
+        
+        // Turn off display completely
         display.setBrightness(0);  // Turn off backlight
         display.fillScreen(COLOR_BACKGROUND);  // Clear screen
+        
+        // Disable WiFi to save power
+        if (wifiConnected) {
+            WiFi.disconnect();
+            wifiConnected = false;
+            Serial.println("WiFi disabled for sleep mode");
+        }
+        
+        // Reduce CPU frequency for sleep mode
+        setCpuFrequencyMhz(80);
+        Serial.println("CPU frequency reduced to 80MHz for sleep");
     }
 }
 
@@ -795,8 +858,24 @@ void checkActivity() {
         lastAccelZ = accelZ;
     }
     
-    // Check for touch (if available)
-    // Note: T-Watch S3 has touch capability, but we need to implement it
+    // Check for touch screen activity
+    uint16_t touchX, touchY;
+    if (display.getTouch(&touchX, &touchY)) {
+        // Only trigger if touch position changed significantly
+        if (abs(touchX - lastTouchX) > 5 || abs(touchY - lastTouchY) > 5) {
+            lastActivity = millis();
+            lastTouchX = touchX;
+            lastTouchY = touchY;
+            touchDetected = true;
+            Serial.printf("Touch detected at (%d, %d)\n", touchX, touchY);
+            
+            if (displaySleep) {
+                exitSleepMode();
+            }
+        }
+    } else {
+        touchDetected = false;
+    }
     
     // Check for button press (if available)
     // Note: T-Watch S3 has buttons, but we need to implement them
@@ -1212,9 +1291,9 @@ void loop()
     
     // Only update display if not in sleep mode
     if (!displaySleep) {
-        // Read battery information every 5 seconds
+        // Read battery information every 10 seconds (reduced from 5s for battery life)
         static unsigned long lastBatteryRead = 0;
-        if (millis() - lastBatteryRead > 5000) {
+        if (millis() - lastBatteryRead > 10000) {
             readBatteryInfo();
             getWeatherData();  // Get weather data
             optimizeBatteryUsage();  // Apply battery optimizations
@@ -1228,15 +1307,16 @@ void loop()
                           (timeinfo.tm_mday != lastDay) ||
                           (timeinfo.tm_mon != lastMonth) ||
                           (wifiConnected != lastWifiState) ||
-                          (batteryPercent != lastBatteryPercent);
+                          (batteryPercent != lastBatteryPercent) ||
+                          touchDetected;  // Redraw on touch
         
         if (needsUpdate) {
             drawCustomInterface();  // Use the optimized custom interface
         }
         
-        delay(1000);
+        delay(2000);  // Increased delay to 2 seconds for better battery life
     } else {
         // In sleep mode, just check for activity
-        delay(100);  // Shorter delay for faster response
+        delay(500);  // Increased delay for better battery life
     }
 } 
