@@ -746,6 +746,10 @@ void setup()
         Serial.println("Weather configuration loaded successfully");
         display.setCursor(20, 110);
         display.println("Weather Config: OK");
+        
+        // Force immediate weather update after successful config load
+        lastWeatherUpdate = 0;
+        Serial.println("Weather update forced for initial load");
     } else {
         Serial.println("Failed to load weather configuration!");
         display.setCursor(20, 110);
@@ -1635,6 +1639,7 @@ void loop()
         static unsigned long lastBatteryRead = 0;
         if (millis() - lastBatteryRead > 8000) {
             readBatteryInfo();
+            Serial.println("Calling getWeatherData()...");
             getWeatherData();  // Get weather data
             optimizeBatteryUsage();  // Apply battery optimizations
             lastBatteryRead = millis();
