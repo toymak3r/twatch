@@ -846,6 +846,32 @@ void exitSleepMode() {
         deepSleepMode = false;
         lastActivity = millis();
         
+        // Restore CPU frequency
+        setCpuFrequencyMhz(240);
+        Serial.println("CPU frequency restored to 240MHz");
+        
+        // Reinitialize PMU if needed
+        if (!pmuInitialized) {
+            Serial.println("Reinitializing PMU...");
+            if (PMU.begin(Wire, AXP2101_SLAVE_ADDRESS, BOARD_I2C_SDA, BOARD_I2C_SCL)) {
+                pmuInitialized = true;
+                Serial.println("PMU reinitialized successfully");
+            } else {
+                Serial.println("PMU reinitialization failed");
+            }
+        }
+        
+        // Reconnect WiFi if it was disconnected
+        if (!wifiConnected && wifiNetworkCount > 0) {
+            Serial.println("Reconnecting WiFi...");
+            if (connectToWiFi()) {
+                wifiConnected = true;
+                Serial.println("WiFi reconnected successfully");
+            } else {
+                Serial.println("WiFi reconnection failed");
+            }
+        }
+        
         // Restore brightness based on battery level
         if (batteryPercent <= 20) {
             display.setBrightness(64);  // 25% brightness
