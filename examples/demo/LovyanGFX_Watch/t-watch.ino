@@ -380,7 +380,30 @@ bool loadWiFiConfig() {
 // Function to read battery information
 void readBatteryInfo() {
     if (!pmuInitialized) {
-        Serial.println("PMU not initialized, cannot read battery");
+        Serial.println("PMU not initialized, using fallback battery reading");
+        // Use ADC fallback for battery voltage
+        batteryVoltage = analogRead(1) * 2 * 3.3 / 4095.0; // ADC reading as fallback
+        Serial.printf("Fallback battery voltage: %.2fV\n", batteryVoltage);
+        
+        // Calculate percentage from fallback voltage
+        if (batteryVoltage > 0) {
+            if (batteryVoltage >= 4.2) {
+                batteryPercent = 100;
+            } else if (batteryVoltage >= 3.8) {
+                batteryPercent = (int)((batteryVoltage - 3.8) * 250);
+            } else if (batteryVoltage >= 3.4) {
+                batteryPercent = (int)((batteryVoltage - 3.4) * 125);
+            } else if (batteryVoltage >= 3.0) {
+                batteryPercent = (int)((batteryVoltage - 3.0) * 125);
+            } else {
+                batteryPercent = 0;
+            }
+            
+            if (batteryPercent > 100) batteryPercent = 100;
+            if (batteryPercent < 0) batteryPercent = 0;
+            
+            Serial.printf("Fallback calculation: %.2fV = %d%%\n", batteryVoltage, batteryPercent);
+        }
         return;
     }
     
@@ -865,11 +888,34 @@ void exitSleepMode() {
         // Reinitialize PMU if needed
         if (!pmuInitialized) {
             Serial.println("Reinitializing PMU...");
-            if (PMU.begin(Wire, AXP2101_SLAVE_ADDRESS, BOARD_I2C_SDA, BOARD_I2C_SCL)) {
-                pmuInitialized = true;
-                Serial.println("PMU reinitialized successfully");
-            } else {
-                Serial.println("PMU reinitialization failed");
+            
+            // Reset I2C for PMU
+            Wire.end();
+            delay(100);
+            Wire.begin(BOARD_I2C_SDA, BOARD_I2C_SCL);
+            Wire.setClock(400000);
+            delay(100);
+            
+            // Try multiple PMU addresses
+            bool pmuFound = false;
+            uint8_t pmuAddresses[] = {AXP2101_SLAVE_ADDRESS, 0x34, 0x35, 0x36};
+            
+            for (int i = 0; i < 4; i++) {
+                Serial.printf("Trying PMU address: 0x%02X\n", pmuAddresses[i]);
+                if (PMU.begin(Wire, pmuAddresses[i], BOARD_I2C_SDA, BOARD_I2C_SCL)) {
+                    pmuInitialized = true;
+                    pmuFound = true;
+                    Serial.printf("PMU reinitialized successfully at address 0x%02X\n", pmuAddresses[i]);
+                    break;
+                }
+                delay(50);
+            }
+            
+            if (!pmuFound) {
+                Serial.println("PMU reinitialization failed on all addresses");
+                // Try to read battery voltage directly as fallback
+                batteryVoltage = analogRead(1) * 2 * 3.3 / 4095.0; // ADC reading as fallback
+                Serial.printf("Fallback battery voltage: %.2fV\n", batteryVoltage);
             }
         }
         
