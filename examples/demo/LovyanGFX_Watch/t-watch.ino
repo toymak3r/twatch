@@ -8,6 +8,7 @@
 #include "esp_sntp.h"
 #include <FFat.h>
 #include <FS.h>
+#include "wifi_icon.h"
 
 // Enable TrueType font support
 #define LOAD_GFXFF
@@ -644,17 +645,23 @@ void formatTimeString(char* timeStr, int hour, int minute) {
 
 void drawWiFiIcon(int x, int y, bool isConnected) {
     if (wifiImageLoaded) {
-        // Draw the PNG image with color tinting
+        // Draw the PNG image directly from embedded data
         Serial.printf("Drawing PNG WiFi icon at (%d,%d), connected: %s\n", 
                      x, y, isConnected ? "YES" : "NO");
         
-        // For now, we'll use the vector icon as fallback
-        // The PNG tinting will be implemented in a future version
-        drawVectorWiFiIcon(x, y, isConnected);
-    } else {
-        // Use vector graphics as fallback
-        drawVectorWiFiIcon(x, y, isConnected);
+        // Draw PNG directly to display using embedded array
+        bool success = display.drawPng(data_assets_wifi_small_png, data_assets_wifi_small_png_len, x, y);
+        
+        if (success) {
+            Serial.println("PNG WiFi icon drawn successfully!");
+            return;
+        } else {
+            Serial.println("Failed to draw PNG, using vector fallback");
+        }
     }
+    
+    // Use vector graphics as fallback
+    drawVectorWiFiIcon(x, y, isConnected);
 }
 
 void drawVectorWiFiIcon(int x, int y, bool isConnected) {
@@ -805,44 +812,17 @@ void manageSleepMode() {
 bool loadWiFiImage() {
     if (wifiImageLoaded) return true;
     
-    Serial.println("Loading WiFi image from assets...");
+    Serial.println("Loading WiFi image from embedded data...");
     
-    // Try to load the optimized image from FFat
-    if (FFat.exists("/assets/wifi_small.png")) {
-        Serial.println("WiFi image file found, attempting PNG load...");
-        
-        // Create a File object and use it directly
-        File file = FFat.open("/assets/wifi_small.png", "r");
-        if (file) {
-            Serial.printf("WiFi image file opened, size: %d bytes\n", file.size());
-            
-            // Try to load using raw file data
-            uint8_t* buffer = (uint8_t*)malloc(file.size());
-            if (buffer) {
-                file.read(buffer, file.size());
-                file.close();
-                
-                // Use LovyanGFX's drawPng function with raw data
-                bool success = display.drawPng(buffer, file.size(), 0, 0, 32, 32, 0, 0, 1.0f, 1.0f, datum_t::top_left);
-                
-                free(buffer);
-                
-                if (success) {
-                    wifiImageLoaded = true;
-                    Serial.println("WiFi PNG image loaded successfully!");
-                    return true;
-                } else {
-                    Serial.println("Failed to decode WiFi PNG image");
-                }
-            } else {
-                Serial.println("Failed to allocate memory for PNG");
-                file.close();
-            }
-        } else {
-            Serial.println("Failed to open WiFi image file");
-        }
+    // Test PNG loading using embedded array data
+    bool success = display.drawPng(data_assets_wifi_small_png, data_assets_wifi_small_png_len, -100, -100);
+    
+    if (success) {
+        wifiImageLoaded = true;
+        Serial.printf("WiFi PNG image loaded successfully! Size: %d bytes\n", data_assets_wifi_small_png_len);
+        return true;
     } else {
-        Serial.println("WiFi image file not found in /assets/wifi_small.png");
+        Serial.println("PNG loading failed, will use vector icon");
     }
     
     Serial.println("Using fallback vector WiFi icon");
