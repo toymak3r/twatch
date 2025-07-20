@@ -379,7 +379,10 @@ bool loadWiFiConfig() {
 
 // Function to read battery information
 void readBatteryInfo() {
-    if (!pmuInitialized) return;
+    if (!pmuInitialized) {
+        Serial.println("PMU not initialized, cannot read battery");
+        return;
+    }
     
     // Read battery voltage
     batteryVoltage = PMU.getBattVoltage();
@@ -393,15 +396,40 @@ void readBatteryInfo() {
     // Check if charging
     isCharging = PMU.isCharging();
     
-    // Note: getBattCurrent() not available in XPowersLib
-    // batteryCurrent = PMU.getBattCurrent();
-    // batteryPower = batteryVoltage * batteryCurrent;
+    // Additional battery status checks
+    bool isVbusIn = PMU.isVbusIn();
+    
+    // Manual battery percentage calculation if PMU returns 0
+    if (batteryPercent == 0 && batteryVoltage > 0) {
+        // Calculate percentage based on voltage (typical Li-ion range: 3.0V-4.2V)
+        if (batteryVoltage >= 4.2) {
+            batteryPercent = 100;
+        } else if (batteryVoltage >= 3.8) {
+            batteryPercent = (int)((batteryVoltage - 3.8) * 250); // 3.8V-4.2V = 0-100%
+        } else if (batteryVoltage >= 3.4) {
+            batteryPercent = (int)((batteryVoltage - 3.4) * 125); // 3.4V-3.8V = 0-50%
+        } else if (batteryVoltage >= 3.0) {
+            batteryPercent = (int)((batteryVoltage - 3.0) * 125); // 3.0V-3.4V = 0-50%
+        } else {
+            batteryPercent = 0;
+        }
+        
+        // Clamp to valid range
+        if (batteryPercent > 100) batteryPercent = 100;
+        if (batteryPercent < 0) batteryPercent = 0;
+    }
     
     // Debug output
-    Serial.printf("Battery: %.2fV, %d%%, Charging: %s, Connected: %s\n", 
+    Serial.printf("Battery: %.2fV, %d%%, Charging: %s, Connected: %s, VBUS: %s\n", 
                  batteryVoltage, batteryPercent, 
                  isCharging ? "Yes" : "No", 
-                 isBatteryConnected ? "Yes" : "No");
+                 isBatteryConnected ? "Yes" : "No",
+                 isVbusIn ? "Yes" : "No");
+    
+    // Additional debug for charging status
+    if (isCharging || isVbusIn) {
+        Serial.println("Charging detected - VBUS or charging indicator active");
+    }
 }
 
 // Function to optimize battery usage based on battery level
