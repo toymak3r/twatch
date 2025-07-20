@@ -9,6 +9,7 @@
 #include <FFat.h>
 #include <FS.h>
 #include "wifi_icon.h"
+#include "wifi_green_icon.h"
 
 // Enable TrueType font support
 #define LOAD_GFXFF
@@ -645,15 +646,22 @@ void formatTimeString(char* timeStr, int hour, int minute) {
 
 void drawWiFiIcon(int x, int y, bool isConnected) {
     if (wifiImageLoaded) {
-        // Draw the PNG image directly from embedded data
+        // Draw the appropriate PNG image based on connection status
         Serial.printf("Drawing PNG WiFi icon at (%d,%d), connected: %s\n", 
                      x, y, isConnected ? "YES" : "NO");
         
-        // Draw PNG directly to display using embedded array
-        bool success = display.drawPng(data_assets_wifi_small_png, data_assets_wifi_small_png_len, x, y);
+        bool success = false;
+        
+        if (isConnected) {
+            // Draw green WiFi icon
+            success = display.drawPng(data_assets_wifi_green_png, data_assets_wifi_green_png_len, x, y);
+        } else {
+            // Draw red WiFi icon (original)
+            success = display.drawPng(data_assets_wifi_small_png, data_assets_wifi_small_png_len, x, y);
+        }
         
         if (success) {
-            Serial.println("PNG WiFi icon drawn successfully!");
+            Serial.printf("PNG WiFi icon drawn successfully (%s)!\n", isConnected ? "GREEN" : "RED");
             return;
         } else {
             Serial.println("Failed to draw PNG, using vector fallback");
