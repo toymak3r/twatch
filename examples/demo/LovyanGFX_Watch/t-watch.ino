@@ -520,6 +520,21 @@ void setup()
     Serial.println("Touch I2C initialized");
     
     // Test touch screen
+    Serial.println("Testing touch screen communication...");
+    
+    // Test I2C communication with touch device
+    Wire.beginTransmission(0x38);
+    Wire.write(0x00); // Device mode register
+    Wire.endTransmission();
+    
+    Wire.requestFrom(0x38, 1);
+    if (Wire.available()) {
+        uint8_t deviceMode = Wire.read();
+        Serial.printf("Touch device mode: 0x%02X\n", deviceMode);
+    } else {
+        Serial.println("ERROR: No response from touch device on I2C!");
+    }
+    
     if (display.getTouch(&lastTouchX, &lastTouchY)) {
         touchInitialized = true;
         Serial.println("Touch screen initialized successfully");
@@ -856,21 +871,58 @@ void checkActivity() {
     
     // Check for touch screen activity
     uint16_t touchX, touchY;
-    if (display.getTouch(&touchX, &touchY)) {
-        // Only trigger if touch position changed significantly
-        if (abs(touchX - lastTouchX) > 5 || abs(touchY - lastTouchY) > 5) {
-            lastActivity = millis();
-            lastTouchX = touchX;
-            lastTouchY = touchY;
-            touchDetected = true;
-            Serial.printf("Touch detected at (%d, %d)\n", touchX, touchY);
+    static unsigned long lastTouchDebug = 0;
+    
+    // Read touch data directly from I2C
+    Wire.beginTransmission(0x38);
+    Wire.write(0x02); // Number of touch points register
+    Wire.endTransmission();
+    
+    Wire.requestFrom(0x38, 1);
+    if (Wire.available()) {
+        uint8_t touchPoints = Wire.read() & 0x0F;
+        
+        if (touchPoints > 0) {
+            // Read touch coordinates
+            Wire.beginTransmission(0x38);
+            Wire.write(0x03); // Register for touch data
+            Wire.endTransmission();
             
-            if (displaySleep) {
-                exitSleepMode();
+            Wire.requestFrom(0x38, 6);
+            if (Wire.available() >= 6) {
+                uint8_t data[6];
+                for (int i = 0; i < 6; i++) {
+                    data[i] = Wire.read();
+                }
+                
+                // Calculate coordinates
+                touchX = ((data[0] & 0x0F) << 8) | data[1];
+                touchY = ((data[2] & 0x0F) << 8) | data[3];
+                
+                // Only trigger if touch position changed significantly
+                if (abs(touchX - lastTouchX) > 5 || abs(touchY - lastTouchY) > 5) {
+                    lastActivity = millis();
+                    lastTouchX = touchX;
+                    lastTouchY = touchY;
+                    touchDetected = true;
+                    Serial.printf("Touch detected at (%d, %d)\n", touchX, touchY);
+                    
+                    if (displaySleep) {
+                        exitSleepMode();
+                    }
+                }
             }
+        } else {
+            touchDetected = false;
         }
-    } else {
-        touchDetected = false;
+    }
+    
+    // Debug touch status every 5 seconds
+    if (millis() - lastTouchDebug > 5000) {
+        lastTouchDebug = millis();
+        Serial.printf("Touch status: %s, Points: %d\n", 
+                     touchDetected ? "Detected" : "No touch", 
+                     Wire.available() ? Wire.read() & 0x0F : 0);
     }
     
     // Check for button press (if available)
