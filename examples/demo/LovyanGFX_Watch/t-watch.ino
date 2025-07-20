@@ -1303,8 +1303,9 @@ void getWeatherData() {
     // Create HTTP client
     HTTPClient http;
     
-    // Build location string (city,country)
+    // Build location string (city,country) with URL encoding for spaces
     String location = weatherCity;
+    location.replace(" ", "%20"); // URL encode spaces
     if (weatherCountry.length() > 0) {
         location += "," + weatherCountry;
     }
