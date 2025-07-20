@@ -7,6 +7,7 @@
 #include "esp_sntp.h"
 #include <FFat.h>
 #include <FS.h>
+#include "nexarustslab_font.h"
 
 // Board pin definitions (from Setup212_LilyGo_T_Watch_S3.h)
 #define BOARD_LCD_SCLK    18  // TFT_SCLK
@@ -81,14 +82,29 @@ public:
 
 LGFX display;
 
-// Colors (Dark Theme - Black background, White text)
-#define COLOR_RED            0xF800     // Red
+// Custom Interface Colors
+#define COLOR_RED            0xF800     // Red (#FF0000)
 #define COLOR_GREEN          0x07E0     // Green
 #define COLOR_BLUE           0x001F     // Blue
 #define COLOR_WHITE          0xFFFF     // White
 #define COLOR_BLACK          0x0000     // Black
-#define COLOR_BACKGROUND     COLOR_BLACK
-#define COLOR_TEXT           COLOR_WHITE
+#define COLOR_YELLOW         0xFFE0     // Yellow
+#define COLOR_ORANGE         0xFD20     // Orange
+#define COLOR_PURPLE         0xF81F     // Purple
+#define COLOR_CYAN           0x07FF     // Cyan
+#define COLOR_DARK_GRAY      0x4208     // Dark Gray
+#define COLOR_LIGHT_GRAY     0x8410     // Light Gray
+
+// Custom Theme Colors
+#define COLOR_CUSTOM_BG      0x0000     // Black background
+#define COLOR_CUSTOM_TEXT    0xF800     // Red text (#FF0000)
+#define COLOR_CUSTOM_ACCENT  0xFFE0     // Yellow accent
+#define COLOR_CUSTOM_WARNING 0xF800     // Red warning
+#define COLOR_CUSTOM_SUCCESS 0x07E0     // Green success
+#define COLOR_CUSTOM_HIGHLIGHT 0xFFFF   // White highlight
+
+#define COLOR_BACKGROUND     COLOR_CUSTOM_BG
+#define COLOR_TEXT           COLOR_CUSTOM_TEXT
 
 // WiFi network structure
 struct WiFiNetwork {
@@ -122,6 +138,9 @@ uint32_t lastStepCount = 0;
 // Sleep mode variables
 bool displaySleep = false;
 unsigned long lastActivity = 0;
+
+// Time format setting (true = 12h, false = 24h)
+bool use12HourFormat = true;
 const unsigned long SLEEP_TIMEOUT = 10000;  // 10 seconds
 const unsigned long DEEP_SLEEP_TIMEOUT = 30000;  // 30 seconds
 bool deepSleepMode = false;
@@ -317,7 +336,10 @@ void setup()
     
     display.setRotation(2);  // Fix inverted display
     display.setBrightness(128);
-    Serial.println("Display configured with dark theme");
+    
+    // Setup custom NexaRustSlab font
+    setupNexaRustSlabFont();
+    Serial.println("Display configured with NexaRustSlab font");
     
     // Show initial screen
     display.fillScreen(COLOR_BACKGROUND);
@@ -475,44 +497,68 @@ void setup()
     Serial.println("Setup completed!");
 }
 
-void drawPixelArtBorder() {
-    // Draw pixelated border around the screen
-    int borderWidth = 4;
+// Removed Pip-Boy border, header, and menu bar functions as they're not needed for the custom interface
+
+// Removed Pip-Boy battery icon function as it's not needed for the custom interface
+
+void drawStepsIcon(int x, int y) {
+    // Draw pixelated steps/footprint icon
+    display.fillRect(x, y + 6, 3, 3, COLOR_CUSTOM_ACCENT);      // Footprint
+    display.fillRect(x + 3, y + 3, 3, 3, COLOR_CUSTOM_ACCENT);
+    display.fillRect(x + 6, y, 3, 3, COLOR_CUSTOM_ACCENT);
+    display.fillRect(x + 9, y + 3, 3, 3, COLOR_CUSTOM_ACCENT);
+    display.fillRect(x + 12, y + 6, 3, 3, COLOR_CUSTOM_ACCENT);
+}
+
+void drawTimeSeparator(int x, int y) {
+    // Draw animated time separator (blinking colon)
+    static bool separatorVisible = true;
+    static unsigned long lastBlink = 0;
     
-    // Top border with pixelated effect
-    for (int x = 0; x < 240; x += 2) {
-        display.fillRect(x, 0, 2, borderWidth, COLOR_TEXT);
+    if (millis() - lastBlink > 500) {
+        separatorVisible = !separatorVisible;
+        lastBlink = millis();
     }
     
-    // Bottom border with pixelated effect
-    for (int x = 0; x < 240; x += 2) {
-        display.fillRect(x, 240 - borderWidth, 2, borderWidth, COLOR_TEXT);
-    }
-    
-    // Left border with pixelated effect
-    for (int y = 0; y < 240; y += 2) {
-        display.fillRect(0, y, borderWidth, 2, COLOR_TEXT);
-    }
-    
-    // Right border with pixelated effect
-    for (int y = 0; y < 240; y += 2) {
-        display.fillRect(240 - borderWidth, y, borderWidth, 2, COLOR_TEXT);
+    if (separatorVisible) {
+        display.fillRect(x, y, 4, 4, COLOR_CUSTOM_ACCENT);
+        display.fillRect(x, y + 10, 4, 4, COLOR_CUSTOM_ACCENT);
     }
 }
 
-void drawWiFiIcon(int x, int y) {
-    // Draw pixelated WiFi icon
-    int iconSize = 12;
+void formatTimeString(char* timeStr, int hour, int minute) {
+    if (use12HourFormat) {
+        // Format: 12-hour with AM/PM (no seconds)
+        int hour12 = hour % 12;
+        if (hour12 == 0) hour12 = 12;
+        const char* ampm = (hour >= 12) ? "PM" : "AM";
+        sprintf(timeStr, "%02d:%02d %s", hour12, minute, ampm);
+    } else {
+        // Format: 24-hour (no seconds)
+        sprintf(timeStr, "%02d:%02d", hour, minute);
+    }
+}
+
+void setupNexaRustSlabFont() {
+    // For now, use the default font but with larger text sizes
+    // The custom font will be implemented in a future update
+    display.setFont(&fonts::Font0);  // Use default font
+    Serial.println("Using default font with custom sizing");
+}
+
+void drawCustomWiFiIcon(int x, int y) {
+    // Draw custom WiFi icon in red
+    int iconSize = 16;
     
-    // WiFi signal lines (pixelated)
-    display.fillRect(x + 2, y + 8, 2, 2, COLOR_TEXT);  // Bottom dot
-    display.fillRect(x + 4, y + 6, 2, 2, COLOR_TEXT);  // Middle dot
-    display.fillRect(x + 6, y + 4, 2, 2, COLOR_TEXT);  // Top dot
+    // WiFi signal lines (custom style)
+    display.fillRect(x - 4, y + 8, 2, 2, COLOR_CUSTOM_TEXT);   // Bottom dot
+    display.fillRect(x - 2, y + 6, 2, 2, COLOR_CUSTOM_TEXT);   // Middle dot
+    display.fillRect(x, y + 4, 2, 2, COLOR_CUSTOM_TEXT);       // Top dot
     
-    // WiFi arcs (simplified pixelated)
-    display.fillRect(x + 1, y + 7, 2, 1, COLOR_TEXT);  // Bottom arc
-    display.fillRect(x + 3, y + 5, 2, 1, COLOR_TEXT);  // Middle arc
-    display.fillRect(x + 5, y + 3, 2, 1, COLOR_TEXT);  // Top arc
+    // WiFi arcs (custom style)
+    display.fillRect(x - 5, y + 7, 2, 1, COLOR_CUSTOM_TEXT);   // Bottom arc
+    display.fillRect(x - 3, y + 5, 2, 1, COLOR_CUSTOM_TEXT);   // Middle arc
+    display.fillRect(x - 1, y + 3, 2, 1, COLOR_CUSTOM_TEXT);   // Top arc
 }
 
 void enterSleepMode() {
@@ -544,7 +590,7 @@ void exitSleepMode() {
         forceRedraw = true;
         
         // Redraw the interface completely
-        drawPixelArtClock();
+        drawCustomInterface();
     }
 }
 
@@ -621,16 +667,15 @@ void manageSleepMode() {
     checkActivity();
 }
 
-void drawPixelArtClock()
+void drawCustomInterface()
 {
     // Get current time
     if (!getLocalTime(&timeinfo)) {
         display.fillScreen(COLOR_BACKGROUND);
-        drawPixelArtBorder();
-        display.setTextColor(COLOR_RED);
+        display.setTextColor(COLOR_CUSTOM_WARNING);
         display.setTextSize(2);
         display.setCursor(20, 100);
-        display.println("NO TIME");
+        display.println("NO SIGNAL");
         return;
     }
     
@@ -640,85 +685,61 @@ void drawPixelArtClock()
     static int lastMinute = -1;
     
     if (forceRedraw || lastDay != timeinfo.tm_mday || lastHour != timeinfo.tm_hour || lastMinute != timeinfo.tm_min) {
-        // Clear screen and draw border
+        // Clear screen and draw background
         display.fillScreen(COLOR_BACKGROUND);
-        drawPixelArtBorder();
         
-        // Draw horizontal separator lines (pixelated)
-        display.fillRect(8, 50, 224, 2, COLOR_TEXT);   // Top separator
-        display.fillRect(8, 180, 224, 2, COLOR_TEXT);  // Bottom separator
+        // TODO: Load and display toywatch-darkgrey-alpha.png background
+        // For now, we'll use a solid background
         
-        // Top section - Status bar
-        display.setTextColor(COLOR_TEXT);
-        display.setTextSize(1);
-        
-        // Day of week
-        char dayStr[10];
-        const char* days[] = {"SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"};
+        // 1. DAY_OF_WEEK - Centralizado horizontalmente
+        char dayStr[20];
+        const char* days[] = {"SUNDAY", "MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY"};
         sprintf(dayStr, "%s", days[timeinfo.tm_wday]);
-        display.setCursor(12, 12);
+        display.setTextColor(COLOR_CUSTOM_TEXT);  // Vermelho puro
+        display.setTextSize(3);  // NexaRustSlab style - larger
+        display.setCursor(120 - (strlen(dayStr) * 9), 30);  // Centralizado
         display.println(dayStr);
         
-        // Date in top left
-        char dateStr[10];
-        sprintf(dateStr, "%02d %s", timeinfo.tm_mday, 
-                (timeinfo.tm_mon == 0) ? "JAN" : 
-                (timeinfo.tm_mon == 1) ? "FEB" : 
-                (timeinfo.tm_mon == 2) ? "MAR" : 
-                (timeinfo.tm_mon == 3) ? "APR" : 
-                (timeinfo.tm_mon == 4) ? "MAY" : 
-                (timeinfo.tm_mon == 5) ? "JUN" : 
-                (timeinfo.tm_mon == 6) ? "JUL" : 
-                (timeinfo.tm_mon == 7) ? "AUG" : 
-                (timeinfo.tm_mon == 8) ? "SEP" : 
-                (timeinfo.tm_mon == 9) ? "OCT" : 
-                (timeinfo.tm_mon == 10) ? "NOV" : "DEC");
-        display.setCursor(12, 24);
+        // 2. DATE - Centralizado horizontalmente
+        char dateStr[20];
+        const char* months[] = {"JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"};
+        sprintf(dateStr, "%02d %s", timeinfo.tm_mday, months[timeinfo.tm_mon]);
+        display.setTextSize(3);  // NexaRustSlab style - larger
+        display.setCursor(120 - (strlen(dateStr) * 9), 58);  // Centralizado
         display.println(dateStr);
         
-        // Battery percentage in top right
-        char batteryStr[10];
-        sprintf(batteryStr, "%d%%", batteryPercent);
-        display.setCursor(180, 12);
-        display.println(batteryStr);
-        
-        // WiFi icon in top right
-        if (wifiConnected) {
-            drawWiFiIcon(200, 8);
-        }
-        
-        // Middle section - Large time display (hours and minutes)
-        display.setTextColor(COLOR_TEXT);
-        display.setTextSize(6);  // Very large text for time
-        
-        char timeStr[10];
-        sprintf(timeStr, "%02d:%02d", timeinfo.tm_hour, timeinfo.tm_min);
-        display.setCursor(20, 70);
+        // 3. TIME - Centralizado
+        char timeStr[20];
+        formatTimeString(timeStr, timeinfo.tm_hour, timeinfo.tm_min);
+        display.setTextSize(5);  // NexaRustSlab style - very large
+        display.setCursor(120 - (strlen(timeStr) * 15), 120);  // Centralizado
         display.println(timeStr);
         
-        // Bottom section - Additional info
-        display.setTextSize(1);
+        // 4. TEMPERATURE - Alinhado à esquerda
+        // TODO: Implementar leitura de temperatura do sensor
+        char tempStr[10];
+        sprintf(tempStr, "21°C");  // Placeholder
+        display.setTextSize(3);  // NexaRustSlab style - larger
+        display.setCursor(45, 195);
+        display.println(tempStr);
         
-        // Date again in bottom center
-        display.setCursor(90, 200);
-        display.println(dateStr);
-        
-        // Steps counter
-        if (BMA.isPedometer()) {
-            stepCounter = BMA.getPedometerCounter();
-            char stepsStr[20];
-            sprintf(stepsStr, "STEPS: %lu", stepCounter);
-            display.setCursor(12, 200);
-            display.println(stepsStr);
+        // 5. WIFI_STATUS_ICON - Centralizado horizontalmente
+        if (wifiConnected) {
+            // Draw WiFi icon
+            drawCustomWiFiIcon(120, 195);
+        } else {
+            // Draw disconnected icon (X)
+            display.setTextSize(3);
+            display.setCursor(120 - 9, 195);
+            display.println("X");
         }
         
-        // Battery voltage
-        if (pmuInitialized && isBatteryConnected) {
-            char voltageStr[15];
-            sprintf(voltageStr, "%.2fV", batteryVoltage);
-            display.setCursor(180, 200);
-            display.println(voltageStr);
-        }
+        // 6. BATTERY_PERCENTAGE - Alinhado à direita
+        char batteryStr[10];
+        sprintf(batteryStr, "%d%%", batteryPercent);
+        display.setTextSize(3);  // NexaRustSlab style - larger
+        display.setCursor(195 - (strlen(batteryStr) * 18), 195);
+        display.println(batteryStr);
         
         lastDay = timeinfo.tm_mday;
         lastHour = timeinfo.tm_hour;
@@ -728,76 +749,21 @@ void drawPixelArtClock()
         forceRedraw = false;
     }
     
-    // Update only seconds (most frequent change)
-    static int lastSecond = -1;
-    if (lastSecond != timeinfo.tm_sec) {
-        // Clear seconds area
-        display.fillRect(180, 100, 60, 30, COLOR_BACKGROUND);
+    // Update time when minutes change (no more seconds update)
+    static int lastMinuteUpdate = -1;
+    if (lastMinuteUpdate != timeinfo.tm_min) {
+        // Clear and redraw time area
+        display.fillRect(120 - 75, 120, 150, 60, COLOR_BACKGROUND);
         
-        // Draw new seconds
-        display.setTextColor(COLOR_TEXT);
-        display.setTextSize(3);
-        char timeStr[10];
-        sprintf(timeStr, "%02d", timeinfo.tm_sec);
-        display.setCursor(180, 100);
+        // Redraw time with new minutes
+        char timeStr[20];
+        formatTimeString(timeStr, timeinfo.tm_hour, timeinfo.tm_min);
+        display.setTextColor(COLOR_CUSTOM_TEXT);
+        display.setTextSize(5);  // NexaRustSlab style - very large
+        display.setCursor(120 - (strlen(timeStr) * 15), 120);
         display.println(timeStr);
         
-        lastSecond = timeinfo.tm_sec;
-    }
-    
-    // Update battery info only when it changes
-    static int lastBatteryPercent = -1;
-    if (lastBatteryPercent != batteryPercent) {
-        // Clear battery area
-        display.fillRect(180, 12, 40, 10, COLOR_BACKGROUND);
-        
-        // Draw new battery percentage
-        display.setTextColor(COLOR_TEXT);
-        display.setTextSize(1);
-        char batteryStr[10];
-        sprintf(batteryStr, "%d%%", batteryPercent);
-        display.setCursor(180, 12);
-        display.println(batteryStr);
-        
-        lastBatteryPercent = batteryPercent;
-    }
-    
-    // Update charging status only when it changes
-    static bool lastChargingState = false;
-    if (lastChargingState != isCharging) {
-        // Clear charging area
-        display.fillRect(12, 36, 50, 10, COLOR_BACKGROUND);
-        
-        // Show charging status if charging
-        if (isCharging) {
-            display.setTextColor(COLOR_GREEN);
-            display.setTextSize(1);
-            display.setCursor(12, 36);
-            display.println("CHARGING");
-            display.setTextColor(COLOR_TEXT);
-        }
-        
-        lastChargingState = isCharging;
-    }
-    
-    // Update steps only when they change
-    static uint32_t lastStepCount = 0;
-    if (BMA.isPedometer()) {
-        stepCounter = BMA.getPedometerCounter();
-        if (lastStepCount != stepCounter) {
-            // Clear steps area
-            display.fillRect(12, 200, 80, 10, COLOR_BACKGROUND);
-            
-            // Draw new steps
-            display.setTextColor(COLOR_TEXT);
-            display.setTextSize(1);
-            char stepsStr[20];
-            sprintf(stepsStr, "STEPS: %lu", stepCounter);
-            display.setCursor(12, 200);
-            display.println(stepsStr);
-            
-            lastStepCount = stepCounter;
-        }
+        lastMinuteUpdate = timeinfo.tm_min;
     }
 }
 
@@ -816,7 +782,7 @@ void loop()
             lastBatteryRead = millis();
         }
         
-        drawPixelArtClock();  // Use the new pixel art interface
+        drawCustomInterface();  // Use the new custom interface
         delay(1000);
     } else {
         // In sleep mode, just check for activity
