@@ -1151,6 +1151,15 @@ void connectWiFi() {
         return;
     }
     
+    // Check if WiFi networks are loaded
+    if (wifiNetworkCount == 0) {
+        Serial.println("No WiFi networks configured! Loading config first...");
+        if (!loadWiFiConfig()) {
+            Serial.println("Failed to load WiFi configuration!");
+            return;
+        }
+    }
+    
     Serial.println("Connecting to WiFi...");
     
     // Reset WiFi completely
