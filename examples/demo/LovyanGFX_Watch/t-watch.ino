@@ -387,8 +387,8 @@ void readBatteryInfo() {
     // Read battery voltage
     batteryVoltage = PMU.getBattVoltage();
     
-    // Read battery percentage
-    batteryPercent = PMU.getBatteryPercent();
+    // Read battery percentage from PMU
+    int pmuPercent = PMU.getBatteryPercent();
     
     // Check if battery is connected
     isBatteryConnected = PMU.isBatteryConnect();
@@ -399,8 +399,8 @@ void readBatteryInfo() {
     // Additional battery status checks
     bool isVbusIn = PMU.isVbusIn();
     
-    // Manual battery percentage calculation if PMU returns 0
-    if (batteryPercent == 0 && batteryVoltage > 0) {
+    // Always use manual battery percentage calculation for better accuracy
+    if (batteryVoltage > 0) {
         // Calculate percentage based on voltage (typical Li-ion range: 3.0V-4.2V)
         if (batteryVoltage >= 4.2) {
             batteryPercent = 100;
@@ -417,6 +417,12 @@ void readBatteryInfo() {
         // Clamp to valid range
         if (batteryPercent > 100) batteryPercent = 100;
         if (batteryPercent < 0) batteryPercent = 0;
+        
+        Serial.printf("Manual calculation: %.2fV = %d%%\n", batteryVoltage, batteryPercent);
+    } else {
+        // Fallback to PMU percentage if voltage reading fails
+        batteryPercent = pmuPercent;
+        Serial.printf("PMU fallback: %d%%\n", batteryPercent);
     }
     
     // Debug output
@@ -429,6 +435,12 @@ void readBatteryInfo() {
     // Additional debug for charging status
     if (isCharging || isVbusIn) {
         Serial.println("Charging detected - VBUS or charging indicator active");
+    }
+    
+    // Force battery percentage to be at least 1% if charging and voltage is good
+    if ((isCharging || isVbusIn) && batteryVoltage > 3.5 && batteryPercent == 0) {
+        batteryPercent = 1;
+        Serial.println("Forcing battery to 1% while charging");
     }
 }
 
