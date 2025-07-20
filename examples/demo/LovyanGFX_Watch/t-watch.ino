@@ -198,8 +198,8 @@ int wifiImageWidth = 0;
 int wifiImageHeight = 0;
 
 
-const unsigned long SLEEP_TIMEOUT = 10000;  // 10 seconds
-const unsigned long DEEP_SLEEP_TIMEOUT = 30000;  // 30 seconds
+const unsigned long SLEEP_TIMEOUT = 15000;  // 15 seconds (conservative)
+const unsigned long DEEP_SLEEP_TIMEOUT = 45000;  // 45 seconds (conservative)
 bool deepSleepMode = false;
 bool forceRedraw = false;  // Flag to force complete redraw
 
@@ -408,22 +408,18 @@ void readBatteryInfo() {
 void optimizeBatteryUsage() {
     if (!pmuInitialized) return;
     
-    // More aggressive brightness control for better battery life
-    if (batteryPercent <= 15) {
-        // Very low battery - minimal brightness
-        display.setBrightness(32);  // 12.5% brightness
-        Serial.println("Very low battery: Minimal brightness");
-    } else if (batteryPercent <= 30) {
+    // Conservative brightness control for better battery life
+    if (batteryPercent <= 20) {
         // Low battery - reduced brightness
         display.setBrightness(64);  // 25% brightness
         Serial.println("Low battery: Reduced brightness");
-    } else if (batteryPercent <= 60) {
+    } else if (batteryPercent <= 50) {
         // Medium battery - moderate brightness
         display.setBrightness(128); // 50% brightness
         Serial.println("Medium battery: Moderate brightness");
     } else {
         // High battery - good brightness (not full to save power)
-        display.setBrightness(192); // 75% brightness
+        display.setBrightness(200); // 78% brightness
         Serial.println("High battery: Good brightness");
     }
     
@@ -434,16 +430,16 @@ void optimizeBatteryUsage() {
         Serial.println("Very low battery: WiFi disabled");
     }
     
-    // Reduce CPU frequency for better battery life
-    if (batteryPercent <= 20) {
-        setCpuFrequencyMhz(80);  // Reduce to 80MHz for low battery
-        Serial.println("Low battery: CPU frequency reduced to 80MHz");
-    } else if (batteryPercent <= 50) {
-        setCpuFrequencyMhz(160); // Reduce to 160MHz for medium battery
-        Serial.println("Medium battery: CPU frequency reduced to 160MHz");
+    // Conservative CPU frequency control for better battery life
+    if (batteryPercent <= 15) {
+        setCpuFrequencyMhz(80);  // Reduce to 80MHz for very low battery
+        Serial.println("Very low battery: CPU frequency reduced to 80MHz");
+    } else if (batteryPercent <= 30) {
+        setCpuFrequencyMhz(160); // Reduce to 160MHz for low battery
+        Serial.println("Low battery: CPU frequency reduced to 160MHz");
     } else {
-        setCpuFrequencyMhz(240); // Full frequency for high battery
-        Serial.println("High battery: Full CPU frequency");
+        setCpuFrequencyMhz(240); // Full frequency for normal battery
+        Serial.println("Normal battery: Full CPU frequency");
     }
 }
 
@@ -1291,9 +1287,9 @@ void loop()
     
     // Only update display if not in sleep mode
     if (!displaySleep) {
-        // Read battery information every 10 seconds (reduced from 5s for battery life)
+        // Read battery information every 8 seconds (conservative for battery life)
         static unsigned long lastBatteryRead = 0;
-        if (millis() - lastBatteryRead > 10000) {
+        if (millis() - lastBatteryRead > 8000) {
             readBatteryInfo();
             getWeatherData();  // Get weather data
             optimizeBatteryUsage();  // Apply battery optimizations
@@ -1314,9 +1310,9 @@ void loop()
             drawCustomInterface();  // Use the optimized custom interface
         }
         
-        delay(2000);  // Increased delay to 2 seconds for better battery life
+        delay(1500);  // Conservative delay for battery life
     } else {
         // In sleep mode, just check for activity
-        delay(500);  // Increased delay for better battery life
+        delay(300);  // Conservative delay for battery life
     }
 } 
