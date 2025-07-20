@@ -3,18 +3,29 @@
 
 #include <LovyanGFX.hpp>
 
-// Simple bitmap font data for NexaRustSlab simulation
-// This is a simplified version that works with LovyanGFX
+// NexaRustSlab Font Simulation
+// Using FreeSansBold fonts which have a similar bold, industrial style
 
-// Font metrics
-#define NEXARUSTSLAB_FONT_WIDTH 18
-#define NEXARUSTSLAB_FONT_HEIGHT 18
-
-// Function to setup a font that simulates NexaRustSlab
+// Function to setup the NexaRustSlab font simulation
 inline void setupNexaRustSlabFont(lgfx::LGFXBase& display) {
-    // Use a built-in font with larger size to simulate NexaRustSlab
-    display.setFont(&fonts::Font2);  // Use Font2 which is larger
-    Serial.println("Using Font2 to simulate NexaRustSlab");
+    // Use FreeSansBold24pt7b which has a bold, industrial style similar to NexaRustSlab
+    display.setFont(&fonts::FreeSansBold24pt7b);
+    Serial.println("Using FreeSansBold24pt7b to simulate NexaRustSlab bold style");
+}
+
+// Alternative function for smaller text
+inline void setupNexaRustSlabFontSmall(lgfx::LGFXBase& display) {
+    // Use FreeSansBold18pt7b for smaller text
+    display.setFont(&fonts::FreeSansBold18pt7b);
+    Serial.println("Using FreeSansBold18pt7b for smaller NexaRustSlab simulation");
+}
+
+// Function for very large text (like time display)
+inline void setupNexaRustSlabFontLarge(lgfx::LGFXBase& display) {
+    // Use FreeSansBold24pt7b with larger size
+    display.setFont(&fonts::FreeSansBold24pt7b);
+    display.setTextSize(1.5);  // Make it even larger
+    Serial.println("Using FreeSansBold24pt7b with 1.5x size for large NexaRustSlab simulation");
 }
 
 #endif // NEXARUSTSLAB_FONT_H 
