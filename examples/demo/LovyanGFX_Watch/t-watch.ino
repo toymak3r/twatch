@@ -1305,7 +1305,9 @@ void getWeatherData() {
     
     // Build location string (city,country) with URL encoding for spaces
     String location = weatherCity;
+    Serial.printf("Original city: '%s'\n", weatherCity.c_str());
     location.replace(" ", "%20"); // URL encode spaces
+    Serial.printf("URL encoded city: '%s'\n", location.c_str());
     if (weatherCountry.length() > 0) {
         location += "," + weatherCountry;
     }
