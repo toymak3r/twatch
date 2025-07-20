@@ -3,6 +3,13 @@
 ## Overview
 Complete documentation for Edward Watch, a smartwatch firmware based on LilyGO T-Watch S3.
 
+📋 **[Complete Documentation Index](DOCUMENTATION_INDEX.md)** - Find all documentation files
+
+## Quick Navigation
+- **[Documentation Index](DOCUMENTATION_INDEX.md)** - Complete list of all documentation
+- **[Setup Guide](configuration/setup-guide.md)** - Get started quickly
+- **[Troubleshooting](troubleshooting/troubleshooting.md)** - Solve common issues
+
 ## Quick Start
 - [Setup Guide](configuration/setup-guide.md) - Complete installation and configuration guide
 - [Weather & WiFi Watch](examples/weather-wifi-watch.md) - Main smartwatch firmware
@@ -20,6 +27,15 @@ Complete documentation for Edward Watch, a smartwatch firmware based on LilyGO T
 
 ### 🛠️ Troubleshooting
 - [Troubleshooting Guide](troubleshooting/troubleshooting.md) - Comprehensive problem-solving guide
+
+### 🏗️ Hardware Documentation
+- [Shell Design](shell/) - 3D shell files and case design
+- [Schematics](schematic/) - Hardware schematics and diagrams
+- [Images](images/) - Documentation images and screenshots
+
+### 🔧 Development Tools
+- [MCP Organisation](MCP_ORGANISATION.md) - MCP configuration and setup
+- [Chinese Documentation](README_CN.MD) - Chinese language documentation
 
 ## Features
 
@@ -95,8 +111,17 @@ password2=YOUR_BACKUP_WIFI_PASSWORD
 
 ### Project Structure
 ```
-edward-watch/
+twatch/
 ├── docs/                    # This documentation
+│   ├── README.md           # Documentation index
+│   ├── README_CN.MD        # Chinese documentation
+│   ├── MCP_ORGANISATION.md # MCP configuration
+│   ├── configuration/      # Setup guides
+│   ├── examples/           # Example documentation
+│   ├── troubleshooting/    # Problem-solving guides
+│   ├── shell/              # 3D shell files
+│   ├── schematic/          # Hardware schematics
+│   └── images/             # Documentation images
 ├── examples/               # Example projects
 │   ├── demo/
 │   │   ├── LovyanGFX_Watch/    # Weather & WiFi Watch
@@ -106,6 +131,11 @@ edward-watch/
 │   └── sensor/            # Sensor examples
 ├── src/                   # Source code
 ├── data/                  # Configuration files
+├── assets/                # Project assets
+├── board/                 # Board configuration
+├── extras/                # Additional headers
+├── firmware/              # Firmware files
+├── mcp/                   # MCP configuration
 ├── platformio.ini         # PlatformIO configuration
 └── README.md             # Main project README
 ```

@@ -4,7 +4,7 @@ based on: LilyGO T-Watch
 [![PlatformIO CI](https://github.com/Xinyuan-LilyGO/TTGO_TWatch_Library/actions/workflows/platformio.yml/badge.svg)](https://github.com/Xinyuan-LilyGO/TTGO_TWatch_Library/actions/workflows/platformio.yml)
 [![Arduino_CI](https://github.com/Xinyuan-LilyGO/TTGO_TWatch_Library/actions/workflows/arduino_ci.yml/badge.svg?branch=t-watch-s3)](https://github.com/Xinyuan-LilyGO/TTGO_TWatch_Library/actions/workflows/arduino_ci.yml)
 
-**English | [中文](README_CN.MD)**
+**English | [中文](docs/README_CN.MD)**
 
 ## 🆕 Latest Updates:
 - ✅ **Weather System**: Real-time weather data with OpenWeatherMap API
@@ -35,7 +35,7 @@ based on: LilyGO T-Watch
 
 1. Install [Arduino IDE](https://www.arduino.cc/en/software)
 2. Install `Arduino ESP32 2.0.9` ,`Tools` -> `Board` -> `Boards Manager`
-    ![InstallArduino](./images/InstallArduino.jpg)
+    ![InstallArduino](./docs/images/InstallArduino.jpg)
     * **Please use 2.0.9. The new version has changed too much and has not yet been adapted.**
 3. Install [TTGO_TWatch_Library](https://github.com/Xinyuan-LilyGO/TTGO_TWatch_Library)
    1. Download a zipfile from github using the "Download ZIP" button and install it using the IDE ("Sketch" -> "Include Library" -> "Add .ZIP Library...")
@@ -190,7 +190,7 @@ Please follow the steps below
    3. Open Windows Device Manager
    4. Press and hold the crown of the watch until the USB device does not appear in the Windows COM port
    5. Press the button in the picture below and keep pressing
-    ![](./images/BUTTON.jpg)
+    ![](./docs/images/BUTTON.jpg)
    6. Press the crown button for one second
    7. Now the COM port is fixed
    8. Select Port in Arduino IDE
@@ -230,14 +230,19 @@ Please follow the steps below
 ```
 docs/
 ├── README.md                    # Documentation index
+├── README_CN.MD                 # Chinese documentation
+├── MCP_ORGANISATION.md          # MCP configuration documentation
 ├── configuration/              # Setup and configuration guides
 │   └── setup-guide.md         # Complete setup guide
 ├── examples/                   # Example documentation
 │   ├── weather-wifi-watch.md  # Weather & WiFi Watch
 │   ├── ble-notifications.md   # BLE Notifications
 │   └── android-app-guide.md   # Android app guide
-└── troubleshooting/           # Problem-solving guides
-    └── troubleshooting.md     # Complete troubleshooting
+├── troubleshooting/           # Problem-solving guides
+│   └── troubleshooting.md     # Complete troubleshooting
+├── shell/                     # 3D shell files and case design
+├── schematic/                 # Hardware schematics and diagrams
+└── images/                    # Documentation images
 ```
 
 ## 3️⃣Use reference
