@@ -6,6 +6,14 @@
 
 **English | [中文](README_CN.MD)**
 
+## 🆕 Latest Updates:
+- ✅ **Weather System**: Real-time weather data with OpenWeatherMap API
+- ✅ **WiFi Power Management**: Smart WiFi connection with battery optimization
+- ✅ **BLE Notifications**: Receive smartphone notifications via BLE (separate example)
+- ✅ **LovyanGFX Integration**: Modern graphics library with TrueType fonts
+- ✅ **Enhanced Battery Management**: Advanced power optimization features
+- ✅ **Touch Interface**: Responsive touch controls and navigation
+
 ## News:
 - Currently `T-Watch-Lib` is only compatible with `T-Watch S3` version, esp32 version is planned to support
 
@@ -52,15 +60,80 @@
 6. Insert USB into the PC and click Upload <If the upload fails, View the FAQ below>
 
 
-<h2 align = "left">4️⃣ Example Source </h2>
+<h2 align = "left">4️⃣ Main Examples </h2>
 
-- **display directory**  examples are all from [TFT_eSPI](https://github.com/Bodmer/TFT_eSPI/tree/master/examples) internal examples
-- **lvgl directory** examples are all from [lvgl](https://github.com/lvgl/lvgl/tree/master/examples)  internal examples
-- **radio directory** examples are all from [RadioLib](https://github.com/jgromes/RadioLib/tree/master/examples/SX126x) internal examples
-- **peripheral directory** examples are all from [XPowersLib](https://github.com/lewisxhe/XPowersLib/tree/master/examples) & [SensorsLib](https://github.com/lewisxhe/SensorsLib/tree/master/examples) internal examples
+### 🌤️ Weather & WiFi Watch (`examples/demo/LovyanGFX_Watch/t-watch.ino`)
+**Complete smartwatch firmware with weather, WiFi, and battery management**
+- ✅ **Real-time Weather**: OpenWeatherMap API integration
+- ✅ **WiFi Power Management**: Smart connection with battery optimization
+- ✅ **Battery Monitoring**: Advanced power management and optimization
+- ✅ **Touch Interface**: Responsive touch controls
+- ✅ **Sleep Mode**: Automatic power saving
+- ✅ **TrueType Fonts**: High-quality text rendering
+
+**Quick Start:**
+```bash
+cd examples/demo/LovyanGFX_Watch/
+pio run -e twatch-s3 --target upload
+```
+
+### 📱 BLE Notifications (`examples/demo/NotificationBLE/notification_ble.ino`)
+**Receive smartphone notifications via BLE without additional apps**
+- ✅ **BLE GATT Server**: Receives notifications from Android/iOS
+- ✅ **Notification Display**: Shows app, title, message, timestamp
+- ✅ **Touch Navigation**: Cycle through notifications
+- ✅ **Notification History**: Stores up to 10 notifications
+- ✅ **Long Press**: Clear all notifications
+
+**Quick Start:**
+```bash
+cd examples/demo/NotificationBLE/
+pio run -e twatch-s3 --target upload -f notification_ble.ino
+```
+
+### 📁 Other Examples
+- **display directory**: Examples from [TFT_eSPI](https://github.com/Bodmer/TFT_eSPI/tree/master/examples)
+- **lvgl directory**: Examples from [lvgl](https://github.com/lvgl/lvgl/tree/master/examples)
+- **radio directory**: Examples from [RadioLib](https://github.com/jgromes/RadioLib/tree/master/examples/SX126x)
+- **peripheral directory**: Examples from [XPowersLib](https://github.com/lewisxhe/XPowersLib/tree/master/examples) & [SensorsLib](https://github.com/lewisxhe/SensorsLib/tree/master/examples)
 
 
-<h2 align = "left">5️⃣ ESP32 basic examples </h2>
+<h2 align = "left">5️⃣ Configuration </h2>
+
+### 🌤️ Weather Configuration
+Create `data/weather_config.ini` for weather data:
+```ini
+# Weather API Configuration
+api_key=YOUR_OPENWEATHERMAP_API_KEY
+city=Your City Name
+country=BR
+update_interval=300
+units=metric
+```
+
+### 📶 WiFi Configuration
+Create `data/wifi_config.ini` for WiFi networks:
+```ini
+# WiFi Configuration
+ssid1=YOUR_WIFI_SSID
+password1=YOUR_WIFI_PASSWORD
+ssid2=YOUR_BACKUP_WIFI_SSID
+password2=YOUR_BACKUP_WIFI_PASSWORD
+```
+
+### 📱 BLE Notifications Setup
+1. Upload `notification_ble.ino` to T-Watch S3
+2. Create Android app using code in `notification_sender.apk`
+3. Grant notification access permissions
+4. Pair devices and test notifications
+
+### 📁 Filesystem Upload
+After creating config files, upload filesystem:
+```bash
+pio run -e twatch-s3 --target uploadfs
+```
+
+<h2 align = "left">6️⃣ ESP32 basic examples </h2>
 
 - [BLE Examples](https://github.com/espressif/arduino-esp32/tree/master/libraries/BLE)
 - [WiFi Examples](https://github.com/espressif/arduino-esp32/tree/master/libraries/WiFi)
@@ -70,10 +143,37 @@
 - For more examples of esp32 chip functions, please refer to [arduino-esp32-libraries](https://github.com/espressif/arduino-esp32/tree/master/libraries)
 
 
-<h2 align = "left">6️⃣ FAQ </h2>
+<h2 align = "left">7️⃣ FAQ </h2>
 
-1. Unable to upload to watch
+### 🔧 General Issues
+1. **Unable to upload to watch**
     1. Make sure that the T-Watch is turned on, you can check it according to the following method, open the computer device manager, check the port, plug the USB port into the computer, and if the new COM device is displayed, it has been turned on, if it is not displayed, press the crown Press the button on the button for one second, and then the device port will pop up, click upload at this time
+
+### 🌤️ Weather Issues
+2. **Weather shows 0.0°C or N/A**
+    1. Check if `data/weather_config.ini` exists and has correct API key
+    2. Verify city name has no quotes (use `London` not `"London"`)
+    3. Ensure WiFi is connected and working
+    4. Check OpenWeatherMap API key is valid
+
+3. **Weather not updating**
+    1. Verify `update_interval` in weather config (default: 300 seconds)
+    2. Check WiFi connection status
+    3. Monitor serial output for API response errors
+
+### 📶 WiFi Issues
+4. **WiFi not connecting**
+    1. Check `data/wifi_config.ini` has correct SSID and password
+    2. Verify WiFi networks are in range
+    3. Check serial output for connection errors
+    4. Ensure filesystem was uploaded with config files
+
+### 📱 BLE Issues
+5. **BLE notifications not working**
+    1. Verify `notification_ble.ino` is uploaded (not `t-watch.ino`)
+    2. Check Android app has notification access permissions
+    3. Ensure devices are paired via Bluetooth
+    4. Monitor serial output for BLE connection status
 2. The USB port keeps flashing in the computer
 * This is a phenomenon caused by the abnormal operation of the program, or the selection of the wrong configuration, and the continuous restart of the esp32. At this time, the problem of not being able to upload can only be solved by manually entering the download mode of the watch
 Please follow the steps below
