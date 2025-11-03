@@ -1,5 +1,6 @@
 #include <LovyanGFX.hpp>
 #include <WiFi.h>
+#include "esp_wifi.h"
 #include <HTTPClient.h>
 #include <Wire.h>
 #include <XPowersLib.h>
@@ -41,6 +42,37 @@
 XPowersAXP2101 PMU;
 SensorBMA423 BMA;
 SensorPCF8563 RTC;
+
+// -------------------- Power profile (local, this demo doesn't use LilyGoLib) --------------------
+enum PowerProfile {
+    POWER_PROFILE_LOW,
+    POWER_PROFILE_BALANCED,
+    POWER_PROFILE_HIGH
+};
+
+void setPowerProfile(PowerProfile profile) {
+    switch (profile) {
+        case POWER_PROFILE_LOW:
+            // Disable optional rails for lowest consumption
+            PMU.disableBLDO2();   // Haptics off
+            PMU.disableDC3();     // GPS off
+            setCpuFrequencyMhz(80);
+            break;
+        case POWER_PROFILE_BALANCED:
+            // Moderate CPU, keep high-draw peripherals off by default
+            PMU.disableBLDO2();   // Haptics off
+            PMU.disableDC3();     // GPS off
+            setCpuFrequencyMhz(160);
+            break;
+        case POWER_PROFILE_HIGH:
+        default:
+            // Max performance and enable optional rails
+            PMU.enableBLDO2();    // Haptics on
+            PMU.enableDC3();      // GPS on (if present)
+            setCpuFrequencyMhz(240);
+            break;
+    }
+}
 
 // -------------------- LovyanGFX Display Configuration --------------------
 class LGFX : public lgfx::LGFX_Device
@@ -209,6 +241,9 @@ unsigned long lastWiFiReconnectAttempt = 0;
 bool wifiPowerSaving = true;
 int wifiReconnectAttempts = 0;
 const int MAX_WIFI_RECONNECT_ATTEMPTS = 3;
+// Retry limiting window (60 minutes)
+unsigned long wifiAttemptWindowStart = 0;
+const unsigned long WIFI_RETRY_WINDOW = 3600000UL;
 
 // Touch
 bool touchInitialized = false;
@@ -623,7 +658,11 @@ void enterSleepMode() {
         display.setBrightness(0);
         display.fillScreen(COLOR_BACKGROUND);
         if (wifiConnected) { WiFi.disconnect(); wifiConnected = false; }
-        setCpuFrequencyMhz(80);
+        // Ensure all radios are off during sleep
+        WiFi.mode(WIFI_OFF);
+        esp_wifi_stop();
+        // Enter lowest power profile during sleep
+        setPowerProfile(POWER_PROFILE_LOW);
     }
 }
 
@@ -632,7 +671,8 @@ void exitSleepMode() {
         Serial.println("Exiting sleep mode...");
         displaySleep = false; deepSleepMode = false;
         lastActivity = millis(); sleepStartTime = 0;
-        setCpuFrequencyMhz(240);
+        // Restore balanced profile on wake
+        setPowerProfile(POWER_PROFILE_BALANCED);
         delay(50);
 
         if (!pmuInitialized) {
@@ -789,18 +829,23 @@ void manageWiFiPower() {
         }
     }
     if (!wifiConnected && weatherConfigLoaded) {
+        // Initialize or roll the 60-minute retry window
+        if (wifiAttemptWindowStart == 0 || (now - wifiAttemptWindowStart) > WIFI_RETRY_WINDOW) {
+            wifiAttemptWindowStart = now;
+            wifiReconnectAttempts = 0;
+        }
         if (now - lastWiFiReconnectAttempt > WIFI_RECONNECT_INTERVAL) {
             if (wifiReconnectAttempts < MAX_WIFI_RECONNECT_ATTEMPTS) {
-                Serial.printf("Attempting WiFi reconnection (%d/%d)\n",
+                Serial.printf("Attempting WiFi reconnection (%d/%d within 60 min)\n",
                               wifiReconnectAttempts + 1, MAX_WIFI_RECONNECT_ATTEMPTS);
                 connectWiFi();
                 lastWiFiReconnectAttempt = now;
                 wifiReconnectAttempts++;
             } else {
-                Serial.println("Max WiFi reconnection attempts reached - will retry later");
-                if (now - lastWiFiReconnectAttempt > 300000) { // 5 min
-                    wifiReconnectAttempts = 0;
-                }
+                unsigned long remaining = (wifiAttemptWindowStart + WIFI_RETRY_WINDOW > now)
+                                          ? (wifiAttemptWindowStart + WIFI_RETRY_WINDOW - now)
+                                          : 0;
+                Serial.printf("Max WiFi reconnection attempts reached; next window in %lu ms\n", remaining);
             }
         }
     }
@@ -811,11 +856,21 @@ void drawWiFiIcon(int x, int y, bool isConnected);
 
 void drawCustomInterface() {
     if (displaySleep) return;
-    if (!getLocalTime(&timeinfo)) { Serial.println("Failed to obtain time"); return; }
+    bool timeAvailable = getLocalTime(&timeinfo);
 
-    char timeStr[20]; sprintf(timeStr, "%02d:%02d", timeinfo.tm_hour, timeinfo.tm_min);
-    char dateStr[20]; sprintf(dateStr, "%02d/%02d", timeinfo.tm_mday, timeinfo.tm_mon + 1);
-    char dayStr[20];  const char* days[] = {"DOM", "SEG", "TER", "QUA", "QUI", "SEX", "SAB"}; strcpy(dayStr, days[timeinfo.tm_wday]);
+    char timeStr[20];
+    char dateStr[20];
+    char dayStr[20];  const char* days[] = {"DOM", "SEG", "TER", "QUA", "QUI", "SEX", "SAB"};
+    if (timeAvailable) {
+        sprintf(timeStr, "%02d:%02d", timeinfo.tm_hour, timeinfo.tm_min);
+        sprintf(dateStr, "%02d/%02d", timeinfo.tm_mday, timeinfo.tm_mon + 1);
+        strcpy(dayStr, days[timeinfo.tm_wday]);
+    } else {
+        // Fallback placeholders when time is not available (keeps display functional without WiFi)
+        strcpy(timeStr, (strlen(lastTimeStr) > 0) ? lastTimeStr : "--:--");
+        strcpy(dateStr, (strlen(lastDateStr) > 0) ? lastDateStr : "--/--");
+        strcpy(dayStr, (strlen(lastDayStr) > 0) ? lastDayStr : "---");
+    }
     char batteryStr[16]; sprintf(batteryStr, "%d%%", batteryPercent);
     char wifiStr[16]; strcpy(wifiStr, wifiConnected ? "WiFi ON" : "WiFi OFF");
 
@@ -833,7 +888,8 @@ void drawCustomInterface() {
     if (needsFullRedraw) { display.fillScreen(COLOR_BACKGROUND); needsFullRedraw = false; }
 
     int screenWidth = display.width(), screenHeight = display.height();
-    int timeWidth = getTrueTypeTextWidth(timeStr, 5);
+    // Use the same font size for width calculation and drawing to ensure centering
+    int timeWidth = getTrueTypeTextWidth(timeStr, 4);
     int timeX = (screenWidth - timeWidth) / 2;
     int timeY = 70;
 
@@ -1047,6 +1103,11 @@ void setup()
             Serial.println("PMU initialization failed on all methods!");
             display.setCursor(20, 140); display.println("PMU: FAIL");
         }
+    }
+
+    // Apply default balanced power profile for better battery life
+    if (pmuInitialized) {
+        setPowerProfile(POWER_PROFILE_BALANCED);
     }
 
     // BMA423 - I2C scan showed device at 0x19, try both 0x18 (default) and 0x19

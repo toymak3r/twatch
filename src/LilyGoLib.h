@@ -135,6 +135,13 @@ enum PowerCtrlChannel {
     WATCH_POWER_GPS
 };
 
+// Balanced power profile targets moderate performance with reduced consumption
+enum PowerProfile {
+    POWER_PROFILE_LOW,
+    POWER_PROFILE_BALANCED,
+    POWER_PROFILE_HIGH
+};
+
 class LilyGoLib :
     public TFT_eSPI,
     public TouchDrvFT6X36,
@@ -175,6 +182,11 @@ public:
 
     void lowPower();
     void highPower();
+    void balancedPower();
+
+    // Switch device-wide power profile without breaking existing API
+    void setPowerProfile(PowerProfile profile);
+    PowerProfile getPowerProfile() const { return powerProfile; }
 
     bool initMicrophone();
 
@@ -206,6 +218,7 @@ private:
     uint8_t brightness;
     Stream *stream;
     SleepMode_t sleepMode;
+    PowerProfile powerProfile = POWER_PROFILE_BALANCED;
 
 #if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5,0,0)
     temperature_sensor_handle_t temp_sensor = NULL;

@@ -498,22 +498,26 @@ bool LilyGoLib::beginPower()
 
 void LilyGoLib::lowPower()
 {
-    // disableALDO1();  //! RTC VBAT
-    // disableALDO2();  //! TFT BACKLIGHT   VDD
-    // disableALDO3();  //! Screen touch VDD
-    // disableALDO4();  //! Radio VDD
-    // disableBLDO2();  //! drv2605 enable
-    // disableDC3();    //! GPS Power
+    // Keep essential rails (RTC, Display power rails) but reduce performance and disable non-essentials
+    // Backlight brightness (actual LED drive) is managed via setBrightness()
+    disableBLDO2();   // Disable DRV2605 haptics
+    disableDC3();     // Disable GPS power
+
+    // Do not toggle RADIO rail automatically here to avoid breaking connectivity expectations
+    // Users can control it via powerIoctl(WATCH_POWER_RADIO, ...)
+
+    // Lower CPU frequency for better battery life
+    setCpuFrequencyMhz(80);
 }
 
 void LilyGoLib::highPower()
 {
-    // enableALDO1();  //! RTC VBAT
-    // enableALDO2();  //! TFT BACKLIGHT   VDD
-    // enableALDO3();  //! Screen touch VDD
-    // enableALDO4();  //! Radio VDD
-    // enableBLDO2();  //! drv2605 enable
-    // enableDC3();    //! GPS Power
+    // Ensure optional peripherals are available when performance is prioritized
+    enableBLDO2();    // Enable DRV2605 haptics
+    enableDC3();      // Enable GPS power (if module present)
+
+    // Restore max CPU frequency
+    setCpuFrequencyMhz(240);
 }
 
 void LilyGoLib::powerIoctl(enum PowerCtrlChannel ch, bool enable)
@@ -535,6 +539,33 @@ void LilyGoLib::powerIoctl(enum PowerCtrlChannel ch, bool enable)
         enable ? enableDC3() : disableDC3();
         break;
     default:
+        break;
+    }
+}
+
+void LilyGoLib::balancedPower()
+{
+    // Balanced profile: moderate CPU clock and disable highest-draw optional rails
+    disableBLDO2();   // Disable haptics by default in balanced
+    disableDC3();     // Keep GPS off unless explicitly needed
+    setCpuFrequencyMhz(160);
+}
+
+void LilyGoLib::setPowerProfile(PowerProfile profile)
+{
+    powerProfile = profile;
+    switch (profile) {
+    case POWER_PROFILE_LOW:
+        lowPower();
+        break;
+    case POWER_PROFILE_BALANCED:
+        balancedPower();
+        break;
+    case POWER_PROFILE_HIGH:
+        highPower();
+        break;
+    default:
+        balancedPower();
         break;
     }
 }

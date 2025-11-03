@@ -28,6 +28,7 @@
 #include <LilyGoLib.h>
 #include <LV_Helper.h>
 #include <WiFi.h>
+#include "esp_wifi.h"
 #ifdef ENABLE_IR_SENDER
 #include <IRsend.h>
 IRsend irsend(BOARD_IR_PIN);
@@ -279,6 +280,18 @@ extern lv_timer_t *transmitTask;
 
 static TaskHandle_t playerTaskHandler;
 static TaskHandle_t vadTaskHandler;
+// -------------------- WiFi power mgmt globals --------------------
+static bool wifiConnected = false;
+static unsigned long lastWiFiActivity = 0;
+static unsigned long lastWiFiReconnectAttempt = 0;
+static const unsigned long WIFI_RECONNECT_INTERVAL = 60000UL; // 1 min
+static int wifiReconnectAttempts = 0;
+static const int MAX_WIFI_RECONNECT_ATTEMPTS = 3; // within window
+static unsigned long wifiAttemptWindowStart = 0;
+static const unsigned long WIFI_RETRY_WINDOW = 3600000UL; // 60 min
+
+static void manageWiFiPower();
+
 
 // Save the ID of the current page
 static uint8_t pageId = 0;
@@ -337,6 +350,26 @@ typedef bool (*player_cb_t)(void);
 static player_cb_t player_task_cb = NULL;
 //static bool playWAV();
 static bool playMP3();
+
+// Center the time row (hour : minute second) horizontally
+static void center_time_row()
+{
+    if (!hour || !minute || !second || !dot) {
+        return;
+    }
+    int totalWidth = lv_obj_get_width(hour)
+                   + 5
+                   + lv_obj_get_width(dot)
+                   + 5
+                   + lv_obj_get_width(minute)
+                   + lv_obj_get_width(second);
+    int startX = (240 - totalWidth) / 2;
+    // Y coordinate taken from initial layout
+    lv_obj_set_pos(hour, startX, 80);
+    lv_obj_align_to(dot, hour, LV_ALIGN_OUT_RIGHT_MID, 5, 0);
+    lv_obj_align_to(minute, dot, LV_ALIGN_OUT_RIGHT_MID, 5, 0);
+    lv_obj_align_to(second, minute, LV_ALIGN_OUT_RIGHT_MID, 0, 0);
+}
 
 lv_obj_t *setupGUI(void);
 EventGroupHandle_t global_event_group;
@@ -469,27 +502,36 @@ void setup()
 
     usbPlugIn = watch.isVbusIn();
 
-    // Initialize WiFi
+    // Initialize WiFi (non-blocking; decoupled from UI)
+    WiFi.mode(WIFI_STA);
     WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
     Serial.print("Connecting to WiFi");
-    while (WiFi.status() != WL_CONNECTED) {
+    unsigned long startAttempt = millis();
+    while (WiFi.status() != WL_CONNECTED && (millis() - startAttempt) < WIFI_CONNECT_WAIT_MAX) {
         Serial.print(".");
-        delay(500);
+        delay(250);
     }
-    Serial.println("\nConnected to WiFi");
+    if (WiFi.status() == WL_CONNECTED) {
+        wifiConnected = true;
+        lastWiFiActivity = millis();
+        wifiReconnectAttempts = 0;
+        Serial.println("\nConnected to WiFi");
+    } else {
+        wifiConnected = false;
+        Serial.println("\nWiFi not connected; continuing without network");
+        WiFi.disconnect();
+        WiFi.mode(WIFI_OFF);
+    }
 
-    // Configure time
+    // Configure time (do not block UI if network absent)
     configTime(GMT_OFFSET_SEC, DAY_LIGHT_OFFSET_SEC, NTP_SERVER1, NTP_SERVER2);
     sntp_servermode_dhcp(1);
-
-    // Wait for time to be set
     time_t now = time(nullptr);
-    while (now < 24 * 3600) {
-        Serial.print(".");
-        delay(100);
-        now = time(nullptr);
+    if (now < 24 * 3600) {
+        Serial.println("Time not synchronized yet; will update when network is available");
+    } else {
+        Serial.println("Time synchronized");
     }
-    Serial.println("\nTime synchronized");
 
     // Get initial time
     printLocalTime();
@@ -736,7 +778,7 @@ lv_obj_t *setupGUI()
     char hour_t[30] = { 0 };
     sprintf(hour_t, "%02d", show_timeinfo.tm_hour);
     lv_label_set_text(hour, hour_t);
-    lv_obj_set_pos(hour, 25, 80);   // time position
+    lv_obj_set_pos(hour, 25, 80);   // initial position; will be re-centered
     lv_obj_set_size(hour, 70, 50);
     lv_obj_set_style_text_align(hour, LV_TEXT_ALIGN_RIGHT, 0);
 
@@ -874,6 +916,9 @@ lv_obj_t *setupGUI()
     lv_style_init(&bot_style);
     lv_style_set_text_color(&bot_style, LV_COLOR_WHITE);
     lv_style_set_text_font(&bot_style, &lv_font_montserrat_14);
+
+    // Center the time display horizontally after creation
+    center_time_row();
 
     return view;
 }
@@ -1501,6 +1546,7 @@ void renew_ui_time(void)
         sprintf(temp, "%02d", show_timeinfo.tm_min);
         lv_label_set_text(minute, temp);
         lv_obj_align_to(second, minute, LV_ALIGN_OUT_RIGHT_MID, 0, 0);
+        center_time_row();
     }
 
     if (show_timeinfo_old.tm_hour != show_timeinfo.tm_hour) {
@@ -1516,6 +1562,7 @@ void renew_ui_time(void)
         } else {
             lv_label_set_text(state, "night");
         }
+        center_time_row();
     }
 
     if (show_timeinfo_old.tm_mday != show_timeinfo.tm_mday) {
@@ -1617,6 +1664,14 @@ void lowPowerEnergyHandler()
     brightnessLevel = watch.getBrightness();
     watch.decrementBrightness(0);
 
+    // Turn off radios during sleep
+    if (WiFi.getMode() != WIFI_MODE_NULL) {
+        WiFi.disconnect();
+        WiFi.mode(WIFI_OFF);
+        esp_wifi_stop();
+    }
+    btStop();
+
     watch.clearPMU();
 
     watch.configreFeatureInterrupt(
@@ -1680,6 +1735,7 @@ void loop()
     
     SensorHandler();
     PMUHandler();
+    manageWiFiPower();
     
     get_BattVoltage();
     
@@ -1713,6 +1769,52 @@ void loop()
         standby_en = 0;
     } else if ((lv_disp_get_inactive_time(NULL) < DEFAULT_SCREEN_TIMEOUT) && !standby_en) {
         standby_en = 1;
+    }
+}
+
+// -------------------- WiFi power/retry management --------------------
+static void manageWiFiPower()
+{
+    unsigned long nowMs = millis();
+
+    // Retry policy: at most 3 attempts per 60-minute rolling window
+    if (wifiAttemptWindowStart == 0 || (nowMs - wifiAttemptWindowStart) > WIFI_RETRY_WINDOW) {
+        wifiAttemptWindowStart = nowMs;
+        wifiReconnectAttempts = 0;
+    }
+
+    if (!wifiConnected) {
+        if ((nowMs - lastWiFiReconnectAttempt) > WIFI_RECONNECT_INTERVAL) {
+            if (wifiReconnectAttempts < MAX_WIFI_RECONNECT_ATTEMPTS) {
+                Serial.printf("[WiFi] Reconnect attempt %d/%d within 60 min\n",
+                              wifiReconnectAttempts + 1, MAX_WIFI_RECONNECT_ATTEMPTS);
+                WiFi.mode(WIFI_STA);
+                WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+                unsigned long attemptStart = nowMs;
+                while (WiFi.status() != WL_CONNECTED && (millis() - attemptStart) < 5000UL) {
+                    delay(100);
+                }
+                if (WiFi.status() == WL_CONNECTED) {
+                    wifiConnected = true;
+                    lastWiFiActivity = millis();
+                    Serial.printf("[WiFi] Connected, IP: %s\n", WiFi.localIP().toString().c_str());
+                } else {
+                    WiFi.disconnect();
+                    WiFi.mode(WIFI_OFF);
+                    Serial.println("[WiFi] Reconnect failed");
+                }
+                lastWiFiReconnectAttempt = millis();
+                wifiReconnectAttempts++;
+            } else {
+                unsigned long remaining = (wifiAttemptWindowStart + WIFI_RETRY_WINDOW > nowMs)
+                                          ? (wifiAttemptWindowStart + WIFI_RETRY_WINDOW - nowMs)
+                                          : 0;
+                Serial.printf("[WiFi] Max attempts reached; next window in %lu ms\n", remaining);
+                lastWiFiReconnectAttempt = nowMs; // avoid tight loop logging
+            }
+        }
+    } else {
+        // Optionally add idle disconnect logic if needed in this demo
     }
 }
 
