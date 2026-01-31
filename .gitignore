@@ -24,4 +24,7 @@ build-preview/
 
 # OS files
 .DS_Store
-Thumbs.db 
+Thumbs.db
+
+# Agent files
+AGENTS.md 
