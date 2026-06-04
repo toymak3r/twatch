@@ -41,6 +41,7 @@ void setup() {
     Serial.begin(115200);
     bootCount++;
     if (!powerInit()) { Serial.println("PMU init failed"); }
+    powerReadClearIrq();  // FIX 2: deassert INT from the press that woke us
     powerCpuLow();
 
     uint16_t mv = powerBattMv();
@@ -53,17 +54,21 @@ void setup() {
     rtcInit();
     pedoInit();
 
+    // FIX 4: bring up display before NTP so the screen shows "SYNC..." instead
+    // of being black during the ~14 s WiFi/NTP round-trip.
+    displayInit();
+    setBacklight(AWAKE_BRIGHTNESS);
+
     ClockData t{}; readClock(t);
     if (needsNtpSync(everSynced, lastSyncYDay, t.yearDay)) {
+        renderSyncSplash();
         bool ok = ntpSync();
         lastSyncOk = ok;
         if (ok) { everSynced = true; readClock(t); lastSyncYDay = t.yearDay; }
     }
 
-    displayInit();
     powerEnableTouchRail();
     touchInit();
-    setBacklight(AWAKE_BRIGHTNESS);
 
     page = PAGE_CLOCK;
     DeviceState d{}; gatherState(t, d);
@@ -90,7 +95,11 @@ void loop() {
     if (page == PAGE_CLOCK && millis() - lastTick > 1000) {     // tick seconds
         lastTick = millis();
         ClockData t{}; DeviceState d{}; gatherState(t, d);
-        renderClockPage(t, d);
+        static int lastRenderedSec = -1;        // FIX 5: skip render if second unchanged
+        if (t.second != lastRenderedSec) {
+            lastRenderedSec = t.second;
+            renderClockPage(t, d);
+        }
     }
     if (millis() - lastInteraction > SCREEN_TIMEOUT_MS) {
         Serial.println("sleep");

@@ -40,7 +40,16 @@ bool powerInit() {
     PMU.enableVbusVoltageMeasure();
     PMU.enableBattVoltageMeasure();
     PMU.setChargingLedMode(XPOWERS_CHG_LED_OFF);
+
+    // FIX 1: enable power-key IRQs so AXP2101 pulls INT low on button press,
+    // which is the ext1 wake source.  Clear any stale status first.
+    PMU.disableIRQ(XPOWERS_AXP2101_ALL_IRQ);
+    PMU.enableIRQ(XPOWERS_AXP2101_PKEY_SHORT_IRQ | XPOWERS_AXP2101_PKEY_LONG_IRQ);
     PMU.clearIrqStatus();
+
+    // INT pin is driven low by the AXP2101 when an IRQ fires; external pull-up
+    // keeps it high otherwise.  Configure as input (no internal pull needed).
+    pinMode(PMU_INT_PIN, INPUT);
 
     // Backlight via LEDC (Arduino-ESP32 2.x API: ledcSetup + ledcAttachPin)
     ledcSetup(0, BL_FREQ, BL_BITS);
@@ -66,9 +75,19 @@ bool powerIsCharging()    { return PMU.isCharging(); }
 void powerDisableTouchRail() { PMU.disableALDO3(); }
 void powerEnableTouchRail()  { PMU.enableALDO3(); }
 
+// FIX 2: read the IRQ status register (which deasserts the INT line) then clear
+// the latch.  Must be called on every boot/wake before re-arming deep sleep.
+void powerReadClearIrq() {
+    PMU.getIrqStatus();
+    PMU.clearIrqStatus();
+}
+
 void powerEnterDeepSleep() {
     setBacklight(0);
     powerDisableTouchRail();           // BMA rail (system 3V3) stays on for pedometer
+    // FIX 2: read+clear IRQ status so INT pin goes high before we arm ext1,
+    // preventing an immediate re-wake loop.
+    PMU.getIrqStatus();
     PMU.clearIrqStatus();
     // Wake when the AXP2101 pulls PMU_INT low on a power-key press.
     esp_sleep_enable_ext1_wakeup(1ULL << PMU_INT_PIN, ESP_EXT1_WAKEUP_ANY_LOW);
