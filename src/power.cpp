@@ -42,8 +42,9 @@ bool powerInit() {
     PMU.setChargingLedMode(XPOWERS_CHG_LED_OFF);
     PMU.clearIrqStatus();
 
-    // Backlight via LEDC (Arduino-ESP32 v3 / IDF5 API)
-    ledcAttach(TFT_BL_PIN, BL_FREQ, BL_BITS);
+    // Backlight via LEDC (Arduino-ESP32 2.x API: ledcSetup + ledcAttachPin)
+    ledcSetup(0, BL_FREQ, BL_BITS);
+    ledcAttachPin(TFT_BL_PIN, 0);
     return true;
 }
 
@@ -57,7 +58,7 @@ void setBacklight(uint8_t level) {
         delay(5);
     }
     g_brightness = level;
-    ledcWrite(TFT_BL_PIN, level);
+    ledcWrite(0, level);  // channel 0
 }
 
 uint16_t powerBattMv()    { return PMU.getBattVoltage(); }
@@ -70,6 +71,6 @@ void powerEnterDeepSleep() {
     powerDisableTouchRail();           // BMA rail (system 3V3) stays on for pedometer
     PMU.clearIrqStatus();
     // Wake when the AXP2101 pulls PMU_INT low on a power-key press.
-    esp_sleep_enable_ext1_wakeup(1ULL << PMU_INT_PIN, ESP_EXT1_WAKEUP_ALL_LOW);
+    esp_sleep_enable_ext1_wakeup(1ULL << PMU_INT_PIN, ESP_EXT1_WAKEUP_ANY_LOW);
     esp_deep_sleep_start();
 }
