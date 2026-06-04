@@ -33,16 +33,26 @@ bool readClock(ClockData& out) {
 }
 
 bool ntpSync() {
+    Serial.printf("ntp: connecting to \"%s\"...\n", WIFI_SSID);
     WiFi.mode(WIFI_STA);
     WiFi.begin(WIFI_SSID, WIFI_PASS);
     uint32_t start = millis();
     while (WiFi.status() != WL_CONNECTED) {
-        if (millis() - start > WIFI_CONNECT_TIMEOUT_MS) { WiFi.disconnect(true); WiFi.mode(WIFI_OFF); return false; }
+        if (millis() - start > WIFI_CONNECT_TIMEOUT_MS) {
+            Serial.printf("ntp: WiFi connect FAILED (status=%d) after %lums\n",
+                          (int)WiFi.status(), (unsigned long)(millis() - start));
+            WiFi.disconnect(true); WiFi.mode(WIFI_OFF); return false;
+        }
         delay(150);
     }
+    Serial.printf("ntp: WiFi connected, ip=%s rssi=%d\n",
+                  WiFi.localIP().toString().c_str(), (int)WiFi.RSSI());
     configTzTime(TZ_STRING, NTP_SERVER);
     struct tm tm = {};
     bool ok = getLocalTime(&tm, 6000);   // wait up to 6s for SNTP
+    Serial.printf("ntp: SNTP %s -> %04d-%02d-%02d %02d:%02d:%02d\n",
+                  ok ? "OK" : "FAILED", tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday,
+                  tm.tm_hour, tm.tm_min, tm.tm_sec);
     if (ok) {
         // setDateTime(year, month, day, hour, min, sec) — 6-arg form
         rtc.setDateTime(tm.tm_year + 1900,
