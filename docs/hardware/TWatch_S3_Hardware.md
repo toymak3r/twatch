@@ -312,7 +312,7 @@ I2S:               1 controller
 
 - [LilyGoLib API Reference](api/LilyGoLib_API.md)
 - [Battery Optimization Guide](../BATTERY_OPTIMIZATION.md)
-- [Essential Examples](../../examples/essential/)
+- [MAINFRAME Firmware Spec](../superpowers/specs/2026-06-04-twatch-mainframe-clock-design.md)
 - [Troubleshooting Guide](guides/troubleshooting.md)
 
 ---
