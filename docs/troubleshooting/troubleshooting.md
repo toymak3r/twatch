@@ -347,8 +347,8 @@ Serial.printf("Free PSRAM: %d bytes\n", ESP.getFreePsram());
 
 ### 1. Self-Help Resources
 - [Setup Guide](../configuration/setup-guide.md)
-- [Weather & WiFi Watch](../examples/weather-wifi-watch.md)
-- [BLE Notifications](../examples/ble-notifications.md)
+- [Quick Start Guide](../guides/Quick_Start_Guide.md)
+- [MAINFRAME Spec](../superpowers/specs/2026-06-04-twatch-mainframe-clock-design.md)
 - [Main README](../../README.md)
 
 ### 2. Community Support

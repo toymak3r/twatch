@@ -124,21 +124,27 @@ bool handleTouchWake() {
 - Sleep: Minimal
 - **Result**: 6-10 hours
 
-## Implementation Examples
+## How the MAINFRAME Firmware Achieves Maximum Battery Life
 
-### 1. Load the Max Battery Life Example
+The MAINFRAME firmware (`src/`) implements these strategies directly — there are no separate example sketches to flash:
+
+1. **Deep sleep as the default state** — the ESP32-S3 spends almost all its time in deep sleep; the physical button is the only wake source.
+2. **10-second screen timeout** — the display is active for at most 10 seconds per wake cycle, then the firmware returns to deep sleep.
+3. **WiFi only for NTP** — WiFi connects on cold boot and once per day to sync time; it is off the rest of the time.
+4. **No continuous sensor polling** — BMA423 and PCF8563 are read on wake, not in a continuous loop.
+
+To build and flash the MAINFRAME firmware:
 ```bash
-# Upload to your T-Watch
-cd examples/demo/MaxBatteryLife
-pio run --target upload --upload-port /dev/ttyACM1
+# Build
+python -m platformio run -e twatch-s3
+
+# Flash (replace COM5 with your port)
+python -m platformio run -e twatch-s3 -t upload --upload-port COM5
 ```
 
-### 2. Load the Power Monitor
-```bash
-# Monitor consumption in real-time
-cd examples/demo/PowerMonitor
-pio run --target upload --upload-port /dev/ttyACM1
-```
+For the full design rationale see the [MAINFRAME Spec](superpowers/specs/2026-06-04-twatch-mainframe-clock-design.md).
+
+Tune screen timeout and brightness in `src/config.h`.
 
 ## Advanced Techniques
 
@@ -179,10 +185,10 @@ void IRAM_ATTR touchWakeup() {
 
 ## Testing and Validation
 
-1. **Start with Power Monitor**: Load `PowerMonitor.ino` first to understand your current consumption
-2. **Apply Max Battery Settings**: Use `MaxBatteryLife.ino` for maximum optimization
-3. **Monitor Real Usage**: Track voltage drop over time to validate improvements
-4. **Adjust for Your Use Case**: Modify timeouts and brightness based on your needs
+1. **Flash the MAINFRAME firmware**: `python -m platformio run -e twatch-s3 -t upload --upload-port COM5`
+2. **Monitor serial output**: `python -m platformio device monitor -b 115200 --port COM5` — observe battery voltage and wake/sleep cycles
+3. **Track voltage drop over time** to validate improvements
+4. **Adjust for your use case**: Modify `SCREEN_TIMEOUT_MS` and `DISPLAY_BRIGHTNESS` in `src/config.h`
 
 ## Expected Results
 

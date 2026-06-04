@@ -1,88 +1,100 @@
 # Documentation Index
 
-This document provides a complete index of all documentation files in the Edward Watch project.
+Complete index of all documentation files for the T-Watch S3 MAINFRAME firmware project.
 
-## 📚 Main Documentation
+## Main Documentation
 
 ### Core Documentation
-- **[README.md](README.md)** - Main documentation index and overview
-- **[README_CN.MD](README_CN.MD)** - Chinese language documentation
-- **[MCP_ORGANISATION.md](MCP_ORGANISATION.md)** - MCP configuration and setup documentation
+- **[README.md](README.md)** — Documentation overview and quick navigation
+- **[index.md](index.md)** — Full documentation index with build commands and file structure
+- **[README_CN.MD](README_CN.MD)** — Chinese language documentation
 
-## 🔧 Configuration & Setup
+## Configuration & Setup
 
-### Setup Guides
-- **[configuration/setup-guide.md](configuration/setup-guide.md)** - Complete installation and configuration guide
+- **[configuration/setup-guide.md](configuration/setup-guide.md)** — Development environment setup and build/flash commands
 
-## 📱 Examples & Tutorials
+## Firmware Design References
 
-### Example Documentation
-- **[examples/weather-wifi-watch.md](examples/weather-wifi-watch.md)** - Weather & WiFi Watch firmware documentation
-- **[examples/ble-notifications.md](examples/ble-notifications.md)** - BLE notification system documentation
-- **[examples/android-app-guide.md](examples/android-app-guide.md)** - Android app development guide
+- **[superpowers/specs/2026-06-04-twatch-mainframe-clock-design.md](superpowers/specs/2026-06-04-twatch-mainframe-clock-design.md)** — Authoritative MAINFRAME hardware & software design spec
+- **[superpowers/plans/2026-06-04-twatch-mainframe-firmware.md](superpowers/plans/2026-06-04-twatch-mainframe-firmware.md)** — MAINFRAME implementation plan
 
-## 🛠️ Troubleshooting & Support
+## Guides
 
-### Problem Solving
-- **[troubleshooting/troubleshooting.md](troubleshooting/troubleshooting.md)** - Comprehensive troubleshooting guide
+- **[guides/Quick_Start_Guide.md](guides/Quick_Start_Guide.md)** — Get up and running quickly
 
-## 🏗️ Hardware Documentation
+## API Reference
+
+- **[api/LilyGoLib_API.md](api/LilyGoLib_API.md)** — Legacy LilyGoLib wrapper reference (kept for historical reference; wrapper has been removed)
+
+## Battery Optimization
+
+- **[BATTERY_OPTIMIZATION.md](BATTERY_OPTIMIZATION.md)** — General battery-saving strategies
+
+## Troubleshooting & Support
+
+- **[troubleshooting/troubleshooting.md](troubleshooting/troubleshooting.md)** — Comprehensive troubleshooting guide
+
+## Hardware Documentation
 
 ### Shell Design
-- **[shell/README.md](shell/README.md)** - Shell design documentation
-- **[shell/BackCover.jpg](shell/BackCover.jpg)** - Back cover image
-- **[shell/BackCover.stp](shell/BackCover.stp)** - Back cover 3D model
-- **[shell/BackCover1.jpg](shell/BackCover1.jpg)** - Alternative back cover image
-- **[shell/BackCover1.stp](shell/BackCover1.stp)** - Alternative back cover 3D model
+- **[shell/README.md](shell/README.md)** — Shell design documentation
+- **[shell/BackCover.jpg](shell/BackCover.jpg)** — Back cover image
+- **[shell/BackCover.stp](shell/BackCover.stp)** — Back cover 3D model
+- **[shell/BackCover1.jpg](shell/BackCover1.jpg)** — Alternative back cover image
+- **[shell/BackCover1.stp](shell/BackCover1.stp)** — Alternative back cover 3D model
 
 ### Schematics
-- **[schematic/README.md](schematic/README.md)** - Hardware schematics documentation
-- **[schematic/T_WATCH_S3.pdf](schematic/T_WATCH_S3.pdf)** - T-Watch S3 schematic
-- **[schematic/T_WATCH-2020V01.pdf](schematic/T_WATCH-2020V01.pdf)** - T-Watch 2020 V01 schematic
-- **[schematic/T_WATCH-2020V02.pdf](schematic/T_WATCH-2020V02.pdf)** - T-Watch 2020 V02 schematic
-- **[schematic/T_WATCH-2020V03.pdf](schematic/T_WATCH-2020V03.pdf)** - T-Watch 2020 V03 schematic
+- **[schematic/README.md](schematic/README.md)** — Hardware schematics documentation
+- **[schematic/T_WATCH_S3.pdf](schematic/T_WATCH_S3.pdf)** — T-Watch S3 schematic
+- **[schematic/T_WATCH-2020V01.pdf](schematic/T_WATCH-2020V01.pdf)** — T-Watch 2020 V01 schematic
+- **[schematic/T_WATCH-2020V02.pdf](schematic/T_WATCH-2020V02.pdf)** — T-Watch 2020 V02 schematic
+- **[schematic/T_WATCH-2020V03.pdf](schematic/T_WATCH-2020V03.pdf)** — T-Watch 2020 V03 schematic
+
+### Hardware Reference
+- **[hardware/TWatch_S3_Hardware.md](hardware/TWatch_S3_Hardware.md)** — Full hardware specs, pinouts, and electrical characteristics
 
 ### Images
-- **[images/README.md](images/README.md)** - Documentation images guide
-- **[images/BUTTON.jpg](images/BUTTON.jpg)** - Button location image
-- **[images/InstallArduino.jpg](images/InstallArduino.jpg)** - Arduino installation guide image
+- **[images/README.md](images/README.md)** — Documentation images guide
+- **[images/BUTTON.jpg](images/BUTTON.jpg)** — Button location image
+- **[images/InstallArduino.jpg](images/InstallArduino.jpg)** — Arduino installation guide image
 
-## 📋 Documentation Categories
+## Getting Started
 
 ### For Beginners
-1. Start with [README.md](README.md) for project overview
-2. Follow [configuration/setup-guide.md](configuration/setup-guide.md) for setup
-3. Choose an example from [examples/](examples/) directory
-4. Refer to [troubleshooting/troubleshooting.md](troubleshooting/troubleshooting.md) if needed
+1. Read [README.md](README.md) for project overview
+2. Follow [configuration/setup-guide.md](configuration/setup-guide.md) for environment setup
+3. Build and flash with: `python -m platformio run -e twatch-s3 -t upload --upload-port COM5`
+4. Edit `src/config.h` to set WiFi credentials and timezone
+5. Refer to [troubleshooting/troubleshooting.md](troubleshooting/troubleshooting.md) if needed
 
 ### For Developers
-1. Review [MCP_ORGANISATION.md](MCP_ORGANISATION.md) for development tools
-2. Study example documentation in [examples/](examples/)
+1. Read the [MAINFRAME design spec](superpowers/specs/2026-06-04-twatch-mainframe-clock-design.md)
+2. Review the [implementation plan](superpowers/plans/2026-06-04-twatch-mainframe-firmware.md)
 3. Check hardware documentation in [schematic/](schematic/) and [shell/](shell/)
+4. Run host unit tests: `python -m platformio test -e native`
 
 ### For Hardware Modifications
 1. Review schematics in [schematic/](schematic/)
 2. Check shell designs in [shell/](shell/)
 3. Reference images in [images/](images/)
 
-## 🔗 Quick Links
+## Quick Links
 
 ### Essential Reading
-- [Setup Guide](configuration/setup-guide.md) - Get started quickly
-- [Weather & WiFi Watch](examples/weather-wifi-watch.md) - Main firmware
-- [Troubleshooting](troubleshooting/troubleshooting.md) - Solve common issues
+- [Setup Guide](configuration/setup-guide.md) — Get started quickly
+- [Quick Start Guide](guides/Quick_Start_Guide.md) — 5-minute start
+- [Troubleshooting](troubleshooting/troubleshooting.md) — Solve common issues
 
-### Development Resources
-- [MCP Configuration](MCP_ORGANISATION.md) - Development tools setup
-- [BLE Notifications](examples/ble-notifications.md) - BLE implementation
-- [Android App Guide](examples/android-app-guide.md) - Mobile app development
+### Design & Architecture
+- [MAINFRAME Spec](superpowers/specs/2026-06-04-twatch-mainframe-clock-design.md)
+- [MAINFRAME Plan](superpowers/plans/2026-06-04-twatch-mainframe-firmware.md)
 
 ### Hardware Resources
-- [Schematics](schematic/) - Hardware diagrams
-- [Shell Design](shell/) - 3D case files
-- [Images](images/) - Reference images
+- [Schematics](schematic/) — Hardware diagrams
+- [Shell Design](shell/) — 3D case files
+- [Hardware Reference](hardware/TWatch_S3_Hardware.md) — Full hardware specs
 
-## 📝 Documentation Standards
+## Documentation Standards
 
 ### File Naming
 - Use kebab-case for file names (e.g., `setup-guide.md`)
@@ -101,7 +113,7 @@ This document provides a complete index of all documentation files in the Edward
 - Provide troubleshooting information
 - Keep documentation up to date with code changes
 
-## 🤝 Contributing to Documentation
+## Contributing to Documentation
 
 ### Adding New Documentation
 1. Create file in appropriate directory
@@ -115,13 +127,7 @@ This document provides a complete index of all documentation files in the Edward
 3. Ensure all examples still work
 4. Test all code snippets
 
-### Translation
-- Create new files with language suffix
-- Maintain parallel structure
-- Update language-specific links
-- Ensure technical terms are consistent
-
 ---
 
-*Last updated: [Current Date]*
-*Documentation version: 2.0* 
+*Last updated: 2026-06-04*
+*Documentation version: 3.0*

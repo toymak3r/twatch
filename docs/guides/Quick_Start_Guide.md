@@ -1,287 +1,140 @@
-# 🚀 T-Watch S3 Quick Start Guide
+# T-Watch S3 Quick Start Guide
 
-Get your T-Watch S3 running in 5 minutes with optimized battery life!
+Get the MAINFRAME firmware running on your T-Watch S3 in minutes.
 
-## 🎯 What You'll Learn
+## What You'll Learn
 
-- Set up development environment
-- Flash your first optimized firmware  
-- Achieve 24+ hour battery life
-- Use essential smartwatch features
+- Set up the development environment
+- Build and flash the single MAINFRAME firmware
+- Configure WiFi credentials and timezone
+- Understand the clock's behaviour and gestures
 
-## 📋 Prerequisites
+## Prerequisites
 
 ### Hardware Required
-- **T-Watch S3** smartwatch
+- **LilyGo T-Watch S3** (ESP32-S3, AXP2101, PCF8563, BMA423, FT6X36, ST7789 240×240)
 - **USB-C cable** for programming
 - **Computer** with internet access
 
 ### Software Required
-- **PlatformIO** (recommended) or Arduino IDE
-- **Git** (for cloning repository)
+- **Python 3.7+** (required for PlatformIO)
+- **PlatformIO** (installed via pip)
+- **Git** (for cloning the repository)
 
-## ⚡ 5-Minute Quick Start
+## Step 1: Install PlatformIO
 
-### Step 1: Install PlatformIO
 ```bash
-# Install Python (if not already installed)
-python3 --version
-
-# Install PlatformIO
 pip install platformio
 
 # Verify installation
-pio --version
+python -m platformio --version
 ```
 
-### Step 2: Get the Code
+> Note: Use `python -m platformio` rather than the `pio` alias — the alias may not be on PATH in all environments.
+
+## Step 2: Get the Code
+
 ```bash
-# Clone the optimized repository
 git clone <repository-url>
 cd twatch
-
-# Verify structure
-ls -la
-# Should see: src/, examples/, platformio.ini, README.md
 ```
 
-### Step 3: Connect T-Watch S3
-1. Connect USB-C cable to watch
-2. Verify device appears:
+## Step 3: Configure the Firmware
+
+Edit `src/config.h` to set your credentials and preferences:
+
+```cpp
+// WiFi — used only for NTP time sync
+#define WIFI_SSID     "your-wifi-ssid"
+#define WIFI_PASSWORD "your-wifi-password"
+
+// Timezone offset from UTC in seconds (e.g. -18000 = UTC-5)
+#define TIMEZONE_OFFSET_SEC -18000
+
+// Screen brightness 0–255
+#define DISPLAY_BRIGHTNESS 150
+
+// Screen-on time in milliseconds before deep sleep (default: 10 s)
+#define SCREEN_TIMEOUT_MS 10000
+```
+
+## Step 4: Connect the Watch
+
+1. Connect the USB-C cable to the watch
+2. Identify the serial port:
    ```bash
-   ls /dev/ttyACM*
-   # Should see: /dev/ttyACM1 (or similar)
+   # Windows PowerShell
+   python -m platformio device list
+   # Look for a COM port, e.g. COM5
    ```
 
-### Step 4: Flash Battery Optimization
+## Step 5: Build and Flash
+
 ```bash
-# Use the 24+ hour battery optimization
-cp examples/essential/BatteryOptimization/* src/
+# Build
+python -m platformio run -e twatch-s3
 
-# Build and upload
-pio run --target upload --upload-port /dev/ttyACM1
-
-# Wait for upload to complete (should show "SUCCESS")
+# Flash (replace COM5 with your port)
+python -m platformio run -e twatch-s3 -t upload --upload-port COM5
 ```
 
-### Step 5: Verify Success
+You should see `SUCCESS` when the upload completes.
+
+## Step 6: Verify
+
+Press the physical button on the watch. The CRT-style clock face should appear for 10 seconds, then the watch returns to deep sleep.
+
+### Monitor Serial Output (Optional)
 ```bash
-# Monitor serial output
-pio device monitor -b 115200
-
-# You should see:
-# === T-Watch Battery Optimization ===
-# Boot #1 - Applying maximum power saving
-# 🔋 Applying maximum battery optimization...
-# ✅ Battery optimization active
-# 🎯 Target: 24+ hours battery life
+python -m platformio device monitor -b 115200 --port COM5
 ```
 
-## 🎉 Congratulations! 
+## Firmware Behaviour
 
-Your T-Watch S3 is now running optimized firmware with **24+ hour battery life**!
+| Action | Result |
+|--------|--------|
+| Press physical button | Wake from deep sleep; show clock for 10 s |
+| Swipe up / down | Cycle pages: CLOCK → SYSTEM → DATE |
+| Double-tap screen | Force NTP time sync |
+| 10 s of inactivity | Return to deep sleep |
+| Cold boot | Connect to WiFi, sync NTP, then deep-sleep |
+| Once per day | Background NTP re-sync |
 
-### Next Steps:
-1. **Touch the screen** - display should wake up
-2. **Watch the serial output** - monitor battery status
-3. **Try other examples** - Display, Sensors, Power, Wireless
+## Run Host Unit Tests
 
-## 🔧 Alternative Development Environments
-
-### Arduino IDE Setup
-1. Install **ESP32 Arduino Core 2.0.9+**
-2. Install required libraries:
-   - LilyGoLib
-   - LovyanGFX  
-   - LVGL
-   - XPowersLib
-   - SensorLib
-3. Select **"LilyGo T-Watch S3"** board
-4. Open example sketch and upload
-
-### VS Code + PlatformIO
-1. Install **PlatformIO IDE extension**
-2. Open project folder
-3. PlatformIO will auto-detect configuration
-4. Use toolbar buttons to build/upload
-
-## 📱 Essential Examples Overview
-
-### 🚀 Try These Examples
-
-#### BatteryOptimization (⭐ Recommended)
 ```bash
-cp examples/essential/BatteryOptimization/* src/
-pio run --target upload
-```
-- **Battery Life**: 24+ hours
-- **Features**: Touch-activated display, auto-sleep
-- **Best for**: Maximum battery efficiency
-
-#### DisplayBasics
-```bash
-cp examples/essential/DisplayBasics/* src/
-pio run --target upload
-```
-- **Battery Life**: 12-18 hours  
-- **Features**: Touch coordinates, graphics, animations
-- **Best for**: Learning display interaction
-
-#### SensorBasics
-```bash
-cp examples/essential/SensorBasics/* src/
-pio run --target upload
-```
-- **Battery Life**: 15-20 hours
-- **Features**: Step counter, accelerometer, RTC
-- **Best for**: Fitness tracking applications
-
-#### PowerManagement
-```bash
-cp examples/essential/PowerManagement/* src/
-pio run --target upload
-```
-- **Battery Life**: 20+ hours
-- **Features**: PMU control, sleep modes, wake-up sources
-- **Best for**: Advanced power optimization
-
-#### WirelessBasic
-```bash
-cp examples/essential/WirelessBasic/* src/
-pio run --target upload
-```
-- **Battery Life**: 8-12 hours
-- **Features**: WiFi scanning, Bluetooth communication
-- **Best for**: Connected applications
-
-## 🔋 Battery Life Tips
-
-### Maximum Battery (24+ hours)
-```cpp
-// From BatteryOptimization example
-watch.setPowerProfile(POWER_PROFILE_LOW);  // 80MHz CPU
-watch.setBrightness(30);                    // Minimal brightness
-watch.powerIoctl(WATCH_POWER_RADIO, false); // Disable radio
-watch.powerIoctl(WATCH_POWER_GPS, false);   // Disable GPS
+python -m platformio test -e native
 ```
 
-### Balanced Usage (12-18 hours)
-```cpp
-// From other examples
-watch.setPowerProfile(POWER_PROFILE_BALANCED); // 160MHz CPU
-watch.setBrightness(100);                       // Medium brightness
-```
+## Common Issues
 
-### Performance Mode (8-12 hours)
-```cpp
-watch.setPowerProfile(POWER_PROFILE_HIGH); // 240MHz CPU
-watch.setBrightness(255);                   // Maximum brightness
-// All peripherals enabled
-```
+### Upload Fails — Port Not Found
+- Disconnect and reconnect the USB cable
+- Press the reset button on the watch
+- Try a different USB port
+- Re-run `python -m platformio device list` to confirm the port name
 
-## 🐛 Common Issues & Solutions
+### Display Stays Blank
+- Verify `DISPLAY_BRIGHTNESS` in `src/config.h` is not `0`
+- Press and hold the physical button for 2 seconds to force a wake
 
-### Upload Issues
-**Problem**: `Could not open /dev/ttyACM1`  
-**Solution**: 
-1. Disconnect and reconnect USB cable
-2. Try different USB port
-3. Press reset button on watch
+### Time Is Wrong
+- Check `TIMEZONE_OFFSET_SEC` in `src/config.h`
+- Double-tap the screen to trigger an immediate NTP sync
+- Verify WiFi credentials are correct
 
-**Problem**: `Permission denied`  
-**Solution**: 
-```bash
-# Add user to dialout group (Linux)
-sudo usermod -a -G dialout $USER
-# Log out and log back in
-```
+### Battery Drains Faster Than Expected
+- Reduce `SCREEN_TIMEOUT_MS` in `src/config.h` (e.g., 5000 for 5 s)
+- The firmware spends most of its life in deep sleep; battery drain is dominated by wake frequency
 
-### Display Issues  
-**Problem**: Display stays blank  
-**Solution**: 
-1. Check brightness: `watch.setBrightness(100);`
-2. Verify power: `watch.powerIoctl(WATCH_POWER_DISPLAY_BL, true);`
+## Next Steps
 
-**Problem**: Touch not working  
-**Solution**: 
-1. Check touch interrupt: `watch.getTouched()`
-2. Restart watch: press power button 10 seconds
-
-### Battery Issues
-**Problem**: Battery drains quickly  
-**Solution**: 
-1. Use low power profile: `watch.setPowerProfile(POWER_PROFILE_LOW);`
-2. Reduce brightness: `watch.setBrightness(30);`
-3. Enable sleep: touch timeout after 15 seconds
-
-**Problem**: Battery percentage wrong  
-**Solution**: 
-1. Calibrate: Full charge = 100%, 3.3V = 0%
-2. Use voltage directly: `watch.getBattVoltage()`
-
-## 📚 Next Steps
-
-### 📖 Learn More
-- [Full API Reference](api/LilyGoLib_API.md)
-- [Hardware Documentation](hardware/TWatch_S3_Hardware.md)
-- [Battery Optimization Guide](../BATTERY_OPTIMIZATION.md)
-
-### 🛠️ Advanced Development
-- Create custom watch faces
-- Add sensor data logging
-- Implement notification system
-- Develop companion mobile app
-
-### 🔧 Customize Examples
-- Modify display timeouts
-- Add custom sensor processing
-- Create unique power profiles
-- Implement data storage
-
-## 🎯 Development Workflow
-
-### Daily Development
-```bash
-# 1. Make changes to code
-vim src/t-watch.ino
-
-# 2. Build and test locally
-pio run
-
-# 3. Upload to watch
-pio run --target upload --upload-port /dev/ttyACM1
-
-# 4. Monitor serial output
-pio device monitor -b 115200
-
-# 5. Test battery optimization
-# Let run for 1+ hour to see battery drain
-```
-
-### Production Build
-```bash
-# Create optimized production firmware
-pio run -e twatch-s3-production
-
-# Check binary size
-ls .pio/build/twatch-s3-production/firmware.bin
-
-# Should be ~800KB (vs 1.2MB default)
-```
-
-## 🎉 Success Checklist
-
-✅ **Environment Setup**: PlatformIO installed and working  
-✅ **Device Connected**: T-Watch S3 detected via USB  
-✅ **First Upload**: Battery optimization flashed successfully  
-✅ **Serial Monitor**: Can see debug output and status  
-✅ **Touch Response**: Display wakes on touch interaction  
-✅ **Battery Optimization**: Achieving extended battery life  
+- **[Setup Guide](../configuration/setup-guide.md)** — full development environment walkthrough
+- **[MAINFRAME Spec](../superpowers/specs/2026-06-04-twatch-mainframe-clock-design.md)** — authoritative design reference
+- **[Battery Optimization Guide](../BATTERY_OPTIMIZATION.md)** — general battery-saving strategies
+- **[Hardware Reference](../hardware/TWatch_S3_Hardware.md)** — pinouts and component specs
+- **[Troubleshooting Guide](../troubleshooting/troubleshooting.md)** — comprehensive problem-solving
 
 ---
 
-## 🚀 Ready for Development!
-
-Your T-Watch S3 development environment is now optimized and ready for creating amazing smartwatch applications with **maximum battery life**!
-
-**🎯 Start building your next smartwatch project today!**
+**Your T-Watch S3 is now running the MAINFRAME firmware!**

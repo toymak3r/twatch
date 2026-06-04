@@ -4,88 +4,29 @@ Essential utilities for T-Watch S3 development, testing, and deployment.
 
 ## 🚀 Flash Scripts
 
-### Battery Optimization Flash
-Flash the 24+ hour battery life firmware with one command.
+### Flash the MAINFRAME Firmware
+Build and flash the single MAINFRAME firmware.
+
+> The project has one firmware in `src/` — there are no separate examples to copy. Edit `src/config.h` for user settings (WiFi, timezone, brightness, timeout) before flashing.
 
 ```bash
-#!/bin/bash
-# tools/flash_battery.sh - Flash maximum battery optimization
+# Build
+python -m platformio run -e twatch-s3
 
-echo "🔋 Flashing T-Watch S3 Battery Optimization..."
-
-# Copy battery optimization to src directory
-cp examples/essential/BatteryOptimization/* src/
-
-# Build and upload
-pio run --target upload --upload-port /dev/ttyACM1
-
-if [ $? -eq 0 ]; then
-    echo "✅ Battery optimization flashed successfully!"
-    echo "🎯 Expected battery life: 24+ hours"
-    echo "📱 Touch screen to wake display"
-else
-    echo "❌ Flash failed! Check device connection."
-    exit 1
-fi
-
-# Start serial monitor
-echo "📡 Starting serial monitor..."
-pio device monitor -b 115200
+# Flash (replace COM5 with your port — use `python -m platformio device list` to find it)
+python -m platformio run -e twatch-s3 -t upload --upload-port COM5
 ```
 
-### Example Flash Script
-Flash any example by name.
+On success you will see `SUCCESS` in the output.
 
+To start the serial monitor after flashing:
 ```bash
-#!/bin/bash
-# tools/flash_example.sh <example_name>
-
-EXAMPLE_NAME=$1
-
-if [ -z "$EXAMPLE_NAME" ]; then
-    echo "Usage: ./flash_example.sh <example_name>"
-    echo "Available examples:"
-    echo "  BatteryOptimization"
-    echo "  DisplayBasics"  
-    echo "  SensorBasics"
-    echo "  PowerManagement"
-    echo "  WirelessBasic"
-    exit 1
-fi
-
-EXAMPLE_PATH="examples/essential/$EXAMPLE_NAME"
-
-if [ ! -d "$EXAMPLE_PATH" ]; then
-    echo "❌ Example '$EXAMPLE_NAME' not found!"
-    echo "Available examples:"
-    ls examples/essential/
-    exit 1
-fi
-
-echo "🚀 Flashing T-Watch S3 example: $EXAMPLE_NAME"
-
-# Copy example to src directory
-cp "$EXAMPLE_PATH"/* src/
-
-# Build and upload
-pio run --target upload --upload-port /dev/ttyACM1
-
-if [ $? -eq 0 ]; then
-    echo "✅ Example '$EXAMPLE_NAME' flashed successfully!"
-else
-    echo "❌ Flash failed! Check device connection."
-    exit 1
-fi
+python -m platformio device monitor -b 115200 --port COM5
 ```
 
-**Usage:**
+### Host Unit Tests
 ```bash
-# Flash battery optimization
-./tools/flash_battery.sh
-
-# Flash specific example
-./tools/flash_example.sh DisplayBasics
-./tools/flash_example.sh SensorBasics
+python -m platformio test -e native
 ```
 
 ## 📊 Power Monitoring Tools
@@ -175,15 +116,11 @@ rm -rf .pio
 rm -rf src/*.o
 rm -rf src/*.d
 
-# Clean example artifacts
-find examples/ -name "*.o" -delete
-find examples/ -name "*.d" -delete
-
 echo "✅ Build cache cleaned!"
 
-# Rebuild with optimization
-echo "🔨 Building optimized firmware..."
-pio run -e twatch-s3-production
+# Rebuild firmware
+echo "🔨 Building firmware..."
+python -m platformio run -e twatch-s3
 
 if [ $? -eq 0 ]; then
     echo "✅ Build successful!"
@@ -445,14 +382,15 @@ echo "📊 Firmware size: $(stat -c%s .pio/build/twatch-s3-production/firmware.b
 
 ### Quick Development Workflow
 ```bash
-# 1. Setup development environment
+# 1. Setup development environment (Linux/macOS — fix USB permissions)
 ./tools/fix_permissions.sh
 
 # 2. Find device
 ./tools/find_device.sh
+# Or: python -m platformio device list
 
-# 3. Flash battery optimization
-./tools/flash_battery.sh
+# 3. Build and flash the MAINFRAME firmware
+python -m platformio run -e twatch-s3 -t upload --upload-port COM5
 
 # 4. Monitor power consumption
 ./tools/monitor_power.sh
@@ -469,10 +407,7 @@ echo "📊 Firmware size: $(stat -c%s .pio/build/twatch-s3-production/firmware.b
 # 2. Analyze firmware size
 ./tools/size_analysis.sh
 
-# 3. Test on device
-./tools/flash_example.sh BatteryOptimization
-
-# 4. Analyze logs
+# 3. Analyze logs
 ./tools/analyze_logs.sh serial_output.log
 ```
 

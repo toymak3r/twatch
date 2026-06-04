@@ -1,238 +1,131 @@
-# 📚 T-Watch S3 Documentation Index
+# T-Watch S3 Documentation Index
 
-Complete documentation library for the optimized T-Watch S3 smartwatch platform.
+Complete documentation for the MAINFRAME firmware — a battery-optimised deep-sleep clock for the LilyGo T-Watch S3.
 
-## 🚀 Quick Start
+## Quick Start
 
 ### [Quick Start Guide](guides/Quick_Start_Guide.md)
-Get your T-Watch S3 running in 5 minutes with 24+ hour battery life!
+Get the MAINFRAME firmware running in minutes.
 
 **What you'll learn:**
-- Set up development environment
-- Flash optimized battery firmware  
-- Achieve maximum battery life
-- Use essential smartwatch features
+- Set up the development environment
+- Build and flash the firmware
+- Configure WiFi credentials and timezone
+- Understand the clock's behaviour and gestures
 
-## 📱 Hardware Documentation
+## Hardware Documentation
 
 ### [Hardware Reference](hardware/TWatch_S3_Hardware.md)
 Complete T-Watch S3 hardware specifications, pinouts, and electrical characteristics.
 
 **Contents:**
-- Component specifications (ESP32-S3, display, sensors)
+- Component specifications (ESP32-S3, AXP2101, PCF8563, BMA423, FT6X36, ST7789)
 - Complete pinout diagram with GPIO mappings
 - Power management rail configuration
 - Electrical requirements and troubleshooting
 
-## 🔧 API Reference
+## API Reference
 
 ### [LilyGoLib API Documentation](api/LilyGoLib_API.md)
-Complete API reference for the T-Watch S3 core library.
+Historical reference for the removed LilyGoLib wrapper (kept for reference; not the current API).
 
-**Key Sections:**
-- Core initialization and setup
-- Display and touch control
-- Power management and battery monitoring
-- Sensor integration (accelerometer, RTC)
-- Sleep modes and wake-up sources
-
-## 🔋 Battery Optimization
+## Battery Optimization
 
 ### [Battery Optimization Guide](../BATTERY_OPTIMIZATION.md)
-Achieve 24+ hour battery life with proven optimization techniques.
+General battery-saving strategies applicable to the T-Watch S3 platform.
 
-**Optimization Areas:**
-- Power profile configuration
-- Display management strategies
-- Sleep mode implementation
-- Peripheral power control
+**Key techniques used by the MAINFRAME firmware:**
+- ESP32-S3 deep sleep between interactions
+- Physical button wake-up (no continuous polling)
+- 10-second screen timeout before returning to deep sleep
+- WiFi used only for NTP (cold boot + once per day)
 
-## 🛠️ Development Tools
+## Development Tools
 
 ### [Development Tools Guide](../tools/Development_Tools.md)
-Professional development utilities and scripts for T-Watch S3 development.
+Development utilities and scripts for T-Watch S3 development.
 
-**Tools Included:**
-- One-click firmware flashing
-- Power consumption monitoring
-- Battery analysis utilities
-- Production build scripts
+## Design References
 
-## 📊 Essential Examples
+- **[MAINFRAME Firmware Spec](superpowers/specs/2026-06-04-twatch-mainframe-clock-design.md)** — authoritative hardware & software design
+- **[MAINFRAME Firmware Plan](superpowers/plans/2026-06-04-twatch-mainframe-firmware.md)** — implementation plan and task breakdown
 
-The optimized platform includes 5 essential examples:
+## The MAINFRAME Firmware
 
-| Example | Description | Battery Life | Path |
-|---------|-------------|--------------|-------|
-| **BatteryOptimization** | Max battery efficiency | 24+ hours | `examples/essential/BatteryOptimization/` |
-| **DisplayBasics** | Touch interaction | 12-18 hours | `examples/essential/DisplayBasics/` |
-| **SensorBasics** | Accelerometer & RTC | 15-20 hours | `examples/essential/SensorBasics/` |
-| **PowerManagement** | PMU & sleep modes | 20+ hours | `examples/essential/PowerManagement/` |
-| **WirelessBasic** | WiFi/Bluetooth | 8-12 hours | `examples/essential/WirelessBasic/` |
+The project contains a **single firmware** targeting the LilyGo T-Watch S3 (ESP32-S3).
 
-## 🎯 Development Workflow
+### Behaviour
+- Wakes from deep sleep when the physical button is pressed
+- Displays a CRT-style clock for 10 seconds, then returns to deep sleep
+- Touch gestures: swipe up/down cycles pages (CLOCK → SYSTEM → DATE), double-tap forces an NTP sync
+- WiFi connects only for NTP: once on cold boot and once per day thereafter
 
-### 1. Environment Setup
+### Build & Flash
 ```bash
-# Install PlatformIO
-pip install platformio
+# Build
+python -m platformio run -e twatch-s3
 
-# Clone optimized repository
-git clone <repository-url>
-cd twatch
+# Flash (replace COM5 with your port)
+python -m platformio run -e twatch-s3 -t upload --upload-port COM5
 ```
 
-### 2. Flash Battery Optimization
+### Run Host Unit Tests
 ```bash
-# One-click flash maximum battery life
-./tools/flash_battery.sh
-
-# Or flash specific example
-./tools/flash_example.sh DisplayBasics
+python -m platformio test -e native
 ```
 
-### 3. Monitor & Test
+### User Configuration
+Edit `src/config.h` to set WiFi credentials, timezone, display brightness, and screen timeout.
+
+## Troubleshooting
+
+### Upload Problems
 ```bash
-# Monitor serial output
-pio device monitor -b 115200
-
-# Test with development tools
-./tools/monitor_power.sh
-./tools/test_sensors.sh
+# List available serial ports (Windows PowerShell)
+python -m platformio device list
 ```
 
-### 4. Production Build
-```bash
-# Create optimized production firmware
-pio run -e twatch-s3-production
+### Display Issues
+- Verify brightness setting in `src/config.h`
+- Press and hold the physical button to force a wake
 
-# Build release package
-./tools/build_production.sh
-```
+### Battery Issues
+- The firmware spends nearly all its time in deep sleep — battery life is dominated by how often you wake it
+- Reduce the screen-on timeout in `src/config.h` if battery drain is too high
 
-## 📈 Performance Metrics
+### Sensor Issues
+- BMA423 accelerometer at I2C address 0x19
+- PCF8563 RTC at I2C address 0x51
+- FT6X36 touch controller at I2C address 0x38
 
-| Metric | Before Optimization | After Optimization | Improvement |
-|--------|-------------------|-------------------|------------|
-| **Project Size** | 374MB | 15MB | **96%** |
-| **Examples** | 321 | 5 | **98%** |
-| **Build Time** | 45s | 12s | **73%** |
-| **Flash Usage** | 1.2MB | 800KB | **33%** |
-| **Battery Life** | 8-12h | 24+ h | **200%** |
-
-## 🐛 Troubleshooting
-
-### Common Issues & Solutions
-
-#### Upload Problems
-```bash
-# Check device connection
-./tools/find_device.sh
-
-# Fix USB permissions  
-./tools/fix_permissions.sh
-```
-
-#### Display Issues
-- Check power: `watch.powerIoctl(WATCH_POWER_DISPLAY_BL, true);`
-- Verify brightness: `watch.setBrightness(100);`
-- Restart watch: press power button 10 seconds
-
-#### Battery Issues
-- Use low power profile: `watch.setPowerProfile(POWER_PROFILE_LOW);`
-- Reduce brightness: `watch.setBrightness(30);`
-- Enable sleep: auto-timeout after 15 seconds
-
-#### Sensor Issues
-- Check I2C connections for BMA423 (0x19) and PCF8563 (0x51)
-- Verify interrupt pins: BMA423 on GPIO 14, RTC on GPIO 17
-- Reset sensors: `watch.readBMA();`
-
-## 📋 File Structure
+## File Structure
 
 ```
-twatch/                                 # Root (15MB)
-├── 📁 src/                            # Core library (100KB)
-│   ├── LilyGoLib.h/.cpp               # Main API
-│   ├── utilities.h                     # Pin definitions
-│   ├── LV_Helper.h/.cpp                # LVGL integration
-│   └── t-watch.ino                     # Current build target
-├── 📁 examples/essential/              # 5 essential examples
-├── 📁 docs/                           # Complete documentation (4.2MB)
-│   ├── api/LilyGoLib_API.md           # API reference
+twatch/
+├── src/                           # MAINFRAME firmware (single build target)
+│   ├── config.h                   # User configuration (WiFi, timezone, etc.)
+│   └── *.cpp / *.h                # Firmware source files
+├── docs/                          # Documentation
+│   ├── api/LilyGoLib_API.md       # Legacy API reference (removed wrapper)
 │   ├── hardware/TWatch_S3_Hardware.md  # Hardware specs
 │   ├── guides/Quick_Start_Guide.md     # Quick start
-│   └── index.md                       # This file
-├── 📁 tools/                          # Development utilities
-│   ├── flash_battery.sh                # Battery optimization flash
-│   ├── Development_Tools.md           # Tool documentation
-│   └── [more scripts]                 # Various utilities
-├── 📄 platformio.ini                   # Optimized build system
-├── 📄 README.md                       # Main project documentation
-└── 📄 AGENTS.md                       # AI development guidelines
+│   ├── superpowers/specs/         # Authoritative design spec
+│   ├── superpowers/plans/         # Implementation plan
+│   └── index.md                   # This file
+├── tools/                         # Development utilities
+├── platformio.ini                 # Build system (env: twatch-s3, native)
+└── README.md                      # Main project README
 ```
 
-## 🎯 Key Features
+## Contributing
 
-### 🔋 Maximum Battery Life
-- **24+ hours** with BatteryOptimization example
-- **Touch-activated display** for minimal power
-- **Auto-sleep modes** after inactivity
-- **Power rail management** for peripherals
-
-### ⚡ Optimized Performance
-- **96% smaller** codebase (374MB → 15MB)
-- **60% faster** compilation
-- **33% reduced** memory usage
-- **Essential features only** (no bloat)
-
-### 📱 Professional Development
-- **Clean API** with comprehensive documentation
-- **One-click tools** for common tasks
-- **Production-ready** build system
-- **Extensive examples** for learning
-
-## 📞 Support & Contributing
-
-### Getting Help
-- **Documentation**: Read relevant guides first
-- **Examples**: Start with essential examples
-- **Tools**: Use provided development utilities
-- **Community**: Check GitHub issues for common problems
-
-### Contributing
-1. **Fork** the repository
-2. **Create feature branch**: `git checkout -b feature/amazing-feature`
-3. **Commit changes**: `git commit -m 'Add amazing feature'`
-4. **Test thoroughly**: Verify battery optimization preserved
-5. **Submit PR**: With clear description of changes
+1. Fork the repository
+2. Create a feature branch: `git checkout -b feature/my-change`
+3. Make changes and run host tests: `python -m platformio test -e native`
+4. Submit a pull request with a clear description
 
 ### Guidelines
-- **Keep it lean** - No new dependencies unless essential
-- **Document everything** - Update relevant docs
-- **Test battery impact** - Ensure 24+ hour goal maintained
-- **Follow style** - Match existing code patterns
-
-## 🚀 Ready to Develop!
-
-The T-Watch S3 platform is now **fully documented and optimized** for professional smartwatch development.
-
-### Next Steps:
-1. **Start with Quick Start Guide** - 5 minutes to running firmware
-2. **Try Essential Examples** - Learn all core features
-3. **Read API Documentation** - Understand available functions
-4. **Use Development Tools** - Streamline your workflow
-5. **Build Custom Applications** - Create amazing smartwatch experiences
-
----
-
-## 🎯 Start Building Today!
-
-```bash
-# Get started immediately
-git clone <repository-url>
-cd twatch
-./tools/flash_battery.sh
-```
-
-**🚀 Your T-Watch S3 is ready for maximum battery life development!**
+- Keep it lean — no new dependencies unless essential
+- Document everything — update relevant docs
+- Test battery impact — the deep-sleep model must be preserved
+- Follow existing code style

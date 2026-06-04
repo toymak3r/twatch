@@ -1,5 +1,7 @@
 # 📚 LilyGoLib API Reference
 
+> **Note:** The LilyGoLib wrapper described in this file has been removed from the project. This document is kept for historical reference only. The current firmware is the MAINFRAME single-firmware in `src/`; see [`docs/superpowers/specs/2026-06-04-twatch-mainframe-clock-design.md`](../superpowers/specs/2026-06-04-twatch-mainframe-clock-design.md) for the authoritative design reference.
+
 Core API for the LilyGo T-Watch S3 smartwatch platform.
 
 ## 🚀 Quick Start
@@ -405,7 +407,7 @@ if (!watch.begin()) {
 
 - [Hardware Pinouts](../hardware/pinouts.md)
 - [Battery Optimization Guide](../BATTERY_OPTIMIZATION.md)
-- [Example Applications](../../examples/essential/)
+- [MAINFRAME Firmware Spec](../superpowers/specs/2026-06-04-twatch-mainframe-clock-design.md)
 - [Troubleshooting Guide](../guides/troubleshooting.md)
 
 ---
