@@ -1,26 +1,30 @@
 #include "timekeep.h"
 #include "pins.h"
 #include "config.h"
-#include <Wire.h>
-#include <SensorPCF8563.hpp>
 #include <WiFi.h>
 #include <time.h>
 
-static SensorPCF8563 rtc;
+// NOTE: This unit's PCF8563 does not keep time — a raw-Wire test showed writes
+// to the seconds register are ACKed but never retained (reads back 0x80, VL bit
+// set) and the oscillator does not advance. We therefore use the ESP32-S3
+// internal RTC (system time): set by NTP, it advances in real time and is
+// preserved across deep sleep by the RTC timer domain. Only a full power-off
+// (dead battery) loses it, which the next NTP sync restores.
+//
+// The TZ environment is held in normal RAM, which is cleared across deep sleep,
+// so it must be re-applied on every boot (rtcInit) before getLocalTime().
 
 bool rtcInit() {
-    if (!rtc.init(Wire, I2C_SDA_PIN, I2C_SCL_PIN)) return false;
-    rtc.disableCLK();   // save backup-battery current
+    setenv("TZ", TZ_STRING, 1);
+    tzset();
     return true;
 }
 
 bool readClock(ClockData& out) {
-    // SensorLib 0.1.9: getDateTime() returns RTC_DateTime (not struct tm)
-    // Use the struct tm* overload which calls conversionUnixTime internally,
-    // then mktime() to populate tm_yday.
     struct tm tm = {};
-    rtc.getDateTime(&tm);
-    mktime(&tm);  // fills tm_yday and tm_wday from year/mon/mday
+    if (!getLocalTime(&tm, 10)) {   // system time not set yet (cold boot pre-NTP)
+        return false;
+    }
     out.year    = tm.tm_year + 1900;
     out.month   = tm.tm_mon + 1;
     out.day     = tm.tm_mday;
@@ -29,7 +33,7 @@ bool readClock(ClockData& out) {
     out.second  = tm.tm_sec;
     out.weekday = tm.tm_wday;
     out.yearDay = tm.tm_yday;
-    return out.year >= 2020;   // false => RTC not set yet
+    return out.year >= 2020;
 }
 
 bool ntpSync() {
@@ -39,29 +43,19 @@ bool ntpSync() {
     uint32_t start = millis();
     while (WiFi.status() != WL_CONNECTED) {
         if (millis() - start > WIFI_CONNECT_TIMEOUT_MS) {
-            Serial.printf("ntp: WiFi connect FAILED (status=%d) after %lums\n",
-                          (int)WiFi.status(), (unsigned long)(millis() - start));
+            Serial.printf("ntp: WiFi connect FAILED (status=%d)\n", (int)WiFi.status());
             WiFi.disconnect(true); WiFi.mode(WIFI_OFF); return false;
         }
         delay(150);
     }
     Serial.printf("ntp: WiFi connected, ip=%s rssi=%d\n",
                   WiFi.localIP().toString().c_str(), (int)WiFi.RSSI());
-    configTzTime(TZ_STRING, NTP_SERVER);
+    configTzTime(TZ_STRING, NTP_SERVER);   // applies TZ + starts SNTP on the ESP32 RTC
     struct tm tm = {};
-    bool ok = getLocalTime(&tm, 6000);   // wait up to 6s for SNTP
+    bool ok = getLocalTime(&tm, 8000);     // wait up to 8s for SNTP to set system time
     Serial.printf("ntp: SNTP %s -> %04d-%02d-%02d %02d:%02d:%02d\n",
                   ok ? "OK" : "FAILED", tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday,
                   tm.tm_hour, tm.tm_min, tm.tm_sec);
-    if (ok) {
-        // setDateTime(year, month, day, hour, min, sec) — 6-arg form
-        rtc.setDateTime(tm.tm_year + 1900,
-                        tm.tm_mon + 1,
-                        tm.tm_mday,
-                        tm.tm_hour,
-                        tm.tm_min,
-                        tm.tm_sec);
-    }
     WiFi.disconnect(true);
     WiFi.mode(WIFI_OFF);
     return ok;
